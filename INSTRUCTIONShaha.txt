@@ -1,0 +1,35 @@
+INSTRUCTIONS
+
+1. Do not forget to install the graphic modules/GUI toolkits on your terminals
+if you haven't installed yet
+
+Enter this on your terminal:
+pip install pyqt5 
+and/or
+pip install matplotlib pyqt5 (matplot, important for report window)
+
+2. Run the file in main.py only. I don't recommend to run the other files.
+Does not work when switching windows blah blah blah Because main.py connects the files together blah blah blah
+
+3. Most of the parts in the code are labeled to make it easy to find stuff in there, 
+if you'd like to change or improve the codes feel free to do as you like.
+
+4. If you encounter errors, bugs, or glitches, do not ask-SEARCH THE INTERNET OR USE AI. 
+Just kiddin, tell everyone what you think. We'll do what we can to fix it.
+
+DevNuts
+*This is not the finished/final product
+*Problem with POS(script.py) not resizing. Will fix after presenting prototype
+*Improve colors and design for inventory
+*Fix buttons,label, and text functions in inventory.
+*Improve REPORT layout and buttons
+*App is not an executable file yet. Would change if needed
+*Add admin/cashier in POS
+*Add security/login window
+*Add Database
+*Remove/keep Login button in inventory window
+*Add ingredients in inventory.
+*Add confirmation after clicking "COMPLETE ORDER".
+
+*FOR THE DATABASE- I've created constant/sample items inside script.py.
+Remove them from the file then place inside the database you've created.
