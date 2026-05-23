@@ -181,6 +181,9 @@ class IMS(QWidget):
         self.switch_callback = switch_callback
         self.report_page = report_page
         self.inventory_page = inventory_page
+        self.section_grids = []
+        self.menu_cards = []
+        self.current_columns = 3
 
         self.selected_item = None
         self.order_total = 0
@@ -469,9 +472,9 @@ class IMS(QWidget):
         grid = QGridLayout()
         grid.setSpacing(15)
 
-        for i, name in enumerate(items):
-            row, col = divmod(i, 3)
+        cards = []
 
+        for i, name in enumerate(items):
             card = QFrame()
             card.setFixedSize(250, 150)
             card.setStyleSheet("""
@@ -488,10 +491,14 @@ class IMS(QWidget):
             img = QLabel()
             img.setAlignment(Qt.AlignCenter)
             img.setStyleSheet("background: transparent;")
+
             path = FLAVOR_IMAGES.get(name, "images/default.png")
             px = QPixmap(path)
+
             if not px.isNull():
-                img.setPixmap(px.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                img.setPixmap(
+                    px.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                )
             else:
                 img.setText("No Image")
 
@@ -501,10 +508,48 @@ class IMS(QWidget):
 
             vbox.addWidget(img)
             vbox.addWidget(text)
+
+            cards.append(card)
+
+        self.section_grids.append(grid)
+        self.menu_cards.append(cards)
+
+        # Initial layout
+        for i, card in enumerate(cards):
+            row, col = divmod(i, 3)
             grid.addWidget(card, row, col)
 
         layout.addLayout(grid)
         return section
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+
+        # Determine column count
+        if self.width() < 800:
+            columns = 1
+        elif self.width() < 1200:
+            columns = 2
+        else:
+            columns = 3
+
+        # Prevent unnecessary rebuilding
+        if hasattr(self, "current_columns") and self.current_columns == columns:
+            return
+
+        self.current_columns = columns
+
+        for grid, cards in zip(self.section_grids, self.menu_cards):
+
+            # Remove items safely WITHOUT deleting widgets
+            while grid.count():
+                item = grid.takeAt(0)
+
+            # Re-add widgets
+            for i, card in enumerate(cards):
+                row = i // columns
+                col = i % columns
+                grid.addWidget(card, row, col)
 
     # -------------------------------------------------------------------------
     # Pixmap helper
