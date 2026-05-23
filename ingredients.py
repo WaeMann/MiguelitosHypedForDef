@@ -10,6 +10,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QIcon, QIntValidator, QColor
 
+from db import get_db_connection
+
 
 def drop_shadow(widget, blur=25, x=3, y=3, alpha=150):
     fx = QGraphicsDropShadowEffect()
@@ -125,13 +127,14 @@ class IngredientsPage(QWidget):
     def __init__(self, switch_callback=None):
         super().__init__()
         self.switch_callback = switch_callback
-
         self.setWindowTitle("Hyped Mangoes — Ingredients")
         self.showMaximized()
         self.selected_row = None
+        self._row_ids = {}   # table row index → DB id
 
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
         self.initUI()
+        self.load_from_db()   # ← was wrongly named _load_defaults() before
 
     def initUI(self):
         root = QVBoxLayout(self)
@@ -157,13 +160,11 @@ class IngredientsPage(QWidget):
         nav_layout = QHBoxLayout()
         nav_layout.setSpacing(8)
 
-        nav_items = [
-            ("  TRANSACTIONS",        "pos.png",       "pos"),
-            ("  INVENTORY",  "inventory.png", "inventory"),
-            ("  REPORT",    "reports.png",   "report"),
-        ]
-
-        for label, icon_path, page_key in nav_items:
+        for label, icon_path, page_key in [
+            ("  TRANSACTIONS", "pos.png",       "pos"),
+            ("  INVENTORY",    "inventory.png", "inventory"),
+            ("  REPORT",       "reports.png",   "report"),
+        ]:
             btn = QPushButton(label)
             btn.setIcon(QIcon(icon_path))
             btn.setIconSize(QSize(18, 18))
@@ -178,10 +179,8 @@ class IngredientsPage(QWidget):
         top_bar_layout.addStretch()
         top_bar_layout.addLayout(nav_layout)
         top_bar_layout.addStretch()
-
         root.addWidget(top_bar)
 
-        # Thin separator line
         sep = QFrame()
         sep.setFixedHeight(2)
         sep.setStyleSheet("background-color: #c8b87a;")
@@ -195,7 +194,7 @@ class IngredientsPage(QWidget):
         content_layout.setSpacing(20)
         root.addWidget(content_area, stretch=1)
 
-        # ── TABLE PANEL ───────────────────────────────────────────────────────
+        # TABLE PANEL
         table_panel = QFrame()
         table_panel.setStyleSheet("QFrame { background-color: white; border-radius: 16px; }")
         drop_shadow(table_panel, blur=30, alpha=120)
@@ -228,7 +227,7 @@ class IngredientsPage(QWidget):
         table_panel_layout.addWidget(self.table)
         content_layout.addWidget(table_panel, stretch=3)
 
-        # ── FORM PANEL ────────────────────────────────────────────────────────
+        # FORM PANEL
         form_panel = QFrame()
         form_panel.setStyleSheet("QFrame { background-color: #E8D28C; border-radius: 16px; }")
         form_panel.setFixedWidth(280)
@@ -253,7 +252,8 @@ class IngredientsPage(QWidget):
         def field_label(text):
             lbl = QLabel(text)
             lbl.setStyleSheet(
-                "font-size: 12px; font-weight: bold; color: #555; background: transparent; text-transform: uppercase; letter-spacing: 1px;"
+                "font-size: 12px; font-weight: bold; color: #555; background: transparent;"
+                " text-transform: uppercase; letter-spacing: 1px;"
             )
             return lbl
 
@@ -282,7 +282,6 @@ class IngredientsPage(QWidget):
         form_panel_layout.addWidget(self.unit)
         form_panel_layout.addWidget(field_label("Category"))
         form_panel_layout.addWidget(self.category)
-
         form_panel_layout.addSpacing(10)
 
         add_btn = QPushButton("＋  ADD ITEM")
@@ -310,51 +309,73 @@ class IngredientsPage(QWidget):
 
         content_layout.addWidget(form_panel)
 
-        # ── LOAD DEFAULT DATA ─────────────────────────────────────────────────
-        self._load_defaults()
+    # ── DB FUNCTIONS ──────────────────────────────────────────────────────────
 
-    # ── FUNCTIONS ──────────────────────────────────────────────────────────
+    def load_from_db(self):
+        """Load all ingredients from DB into the table."""
+        self.table.setRowCount(0)
+        self._row_ids = {}
+        try:
+            db = get_db_connection()
+            cur = db.cursor(dictionary=True)
+            cur.execute("SELECT id, ingredient_name, stock_left, unit, category FROM ingredients ORDER BY category, ingredient_name")
+            rows = cur.fetchall()
+            db.close()
+            for ingredient in rows:
+                row = self.table.rowCount()
+                self.table.insertRow(row)
+                self.table.setRowHeight(row, 40)
+                for col, val in enumerate([
+                    str(row + 1),
+                    ingredient["ingredient_name"],
+                    str(ingredient["stock_left"]),
+                    ingredient["unit"] or "",
+                    ingredient["category"] or "",
+                ]):
+                    self.table.setItem(row, col, self._make_cell(val))
+                self._row_ids[row] = ingredient["id"]
+        except Exception as err:
+            QMessageBox.critical(self, "DB Error", f"Could not load ingredients:\n{err}")
+
+    # ── CRUD ──────────────────────────────────────────────────────────────────
 
     def _make_cell(self, text, align=Qt.AlignCenter):
         item = QTableWidgetItem(text)
         item.setTextAlignment(align)
         return item
 
-    def _load_Ingredients(self):
-        Ingredients = [
-            ("Mango Soft Serve Mix 1kg", "24", "pcs",   "Soft Serve"),
-            ("Mangoes 16oz Cup",         "200","pcs",   "Cups"),
-            ("Mangoes 12oz Cup",         "250","pcs",   "Cups"),
-            ("Dome Lid for 16oz Cups",   "200","pcs",   "Lids"),
-            ("Dome Lid for 12oz Cups",   "250","pcs",   "Lids"),
-            ("Giant Belgian Cone",       "780","cones", "Cone"),
-            ("Fresh Mangoes",            "3",  "kg",    "Fruit"),
-            ("Crashed Graham",           "4",  "pcs",   "Toppings"),
-            ("Mango Syrup 1kg Gallon",   "5",  "pcs",   "Syrup"),
-            ("Mango Juice 1kg Gallon",   "7",  "pcs",   "Juice"),
-            ("All Purpose Cream",        "10", "pcs",   "Cream"),
-            ("Condensada",               "5",  "pcs",   "Milk"),
-        ]
-        for ingredient in Ingredients:
-            row = self.table.rowCount()
-            self.table.insertRow(row)
-            self.table.setRowHeight(row, 40)
-            for col, val in enumerate([str(row + 1), *ingredient]):
-                self.table.setItem(row, col, self._make_cell(val))
-
     def update_numbers(self):
+        new_ids = {}
         for row in range(self.table.rowCount()):
             self.table.setItem(row, 0, self._make_cell(str(row + 1)))
+            if row in self._row_ids:
+                new_ids[row] = self._row_ids[row]
+        self._row_ids = new_ids
 
     def add_item(self):
         if not self.name.text() or not self.stock.text():
             QMessageBox.warning(self, "Missing Fields", "Please fill in Ingredient Name and Stock.")
             return
+        try:
+            db = get_db_connection()
+            cur = db.cursor()
+            cur.execute(
+                "INSERT INTO ingredients (ingredient_name, stock_left, unit, category) VALUES (%s, %s, %s, %s)",
+                (self.name.text(), int(self.stock.text()), self.unit.text(), self.category.text())
+            )
+            new_id = cur.lastrowid
+            db.commit()
+            db.close()
+        except Exception as err:
+            QMessageBox.critical(self, "DB Error", f"Could not add ingredient:\n{err}")
+            return
+
         row = self.table.rowCount()
         self.table.insertRow(row)
         self.table.setRowHeight(row, 40)
         for col, val in enumerate(["", self.name.text(), self.stock.text(), self.unit.text(), self.category.text()]):
             self.table.setItem(row, col, self._make_cell(val))
+        self._row_ids[row] = new_id
         self.update_numbers()
         self.clear_inputs()
 
@@ -369,6 +390,20 @@ class IngredientsPage(QWidget):
         if self.selected_row is None:
             QMessageBox.warning(self, "No Selection", "Select a row first!")
             return
+        product_id = self._row_ids.get(self.selected_row)
+        if product_id:
+            try:
+                db = get_db_connection()
+                cur = db.cursor()
+                cur.execute(
+                    "UPDATE ingredients SET ingredient_name=%s, stock_left=%s, unit=%s, category=%s WHERE id=%s",
+                    (self.name.text(), int(self.stock.text() or 0), self.unit.text(), self.category.text(), product_id)
+                )
+                db.commit()
+                db.close()
+            except Exception as err:
+                QMessageBox.critical(self, "DB Error", f"Could not update ingredient:\n{err}")
+                return
         for col, val in enumerate(["", self.name.text(), self.stock.text(), self.unit.text(), self.category.text()]):
             self.table.setItem(self.selected_row, col, self._make_cell(val))
         self.update_numbers()
@@ -379,7 +414,26 @@ class IngredientsPage(QWidget):
         if self.selected_row is None:
             QMessageBox.warning(self, "No Selection", "Select a row first!")
             return
+        product_id = self._row_ids.get(self.selected_row)
+        if product_id:
+            reply = QMessageBox.question(
+                self, "Confirm Delete", "Delete this ingredient from the database?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+            try:
+                db = get_db_connection()
+                cur = db.cursor()
+                cur.execute("DELETE FROM ingredients WHERE id = %s", (product_id,))
+                db.commit()
+                db.close()
+            except Exception as err:
+                QMessageBox.critical(self, "DB Error", f"Could not delete ingredient:\n{err}")
+                return
         self.table.removeRow(self.selected_row)
+        if self.selected_row in self._row_ids:
+            del self._row_ids[self.selected_row]
         self.selected_row = None
         self.update_numbers()
         self.clear_inputs()
@@ -391,7 +445,6 @@ class IngredientsPage(QWidget):
         self.category.clear()
 
 
-# ── ENTRY POINT ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = IngredientsPage()

@@ -1,3 +1,5 @@
+-- Old database creation file
+
 -- Create Database
 CREATE DATABASE pos_system;
 USE pos_system;

@@ -15,8 +15,8 @@ matplotlib.use("Qt5Agg")
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from db import get_db_connection
 
-# ── Shared style helpers (mirrors script.py) ─────────────────────────────────
 
 def drop_shadow(widget, blur=25, x=3, y=3, alpha=150):
     fx = QGraphicsDropShadowEffect()
@@ -41,20 +41,6 @@ QPushButton {
 QPushButton:hover { background-color: #D9BE70; }
 """
 
-BLUE_BTN_STYLE = """
-QPushButton {
-    background-color: #34699A;
-    color: white;
-    font-size: 14px;
-    border-radius: 10px;
-    padding: 8px 14px;
-    font-weight: bold;
-    border: none;
-}
-QPushButton:hover { background-color: #2a567a; }
-"""
-
-# Warm palette for matplotlib charts
 CHART_COLORS = [
     "#E8D28C", "#34699A", "#c0392b", "#1e7f3f",
     "#e67e22", "#8e44ad", "#16a085", "#2c3e50",
@@ -73,7 +59,42 @@ class ReportPage(QWidget):
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
 
         self._build_ui()
+        self._load_from_db()   # load historical orders on startup
         self.refresh_report()
+
+    # ── DB LOAD ──────────────────────────────────────────────────────────────
+
+    def _load_from_db(self):
+        """Load all past orders from DB to pre-populate charts."""
+        try:
+            db = get_db_connection()
+            cur = db.cursor(dictionary=True)
+
+            # Per-item sales totals
+            cur.execute("""
+                SELECT oi.product_name, SUM(oi.item_price) AS total
+                FROM order_items oi
+                GROUP BY oi.product_name
+            """)
+            for row in cur.fetchall():
+                name = row["product_name"] or "Unknown"
+                self.sales_data[name] = self.sales_data.get(name, 0) + float(row["total"])
+
+            # Daily totals
+            cur.execute("""
+                SELECT DATE(created_at) AS day, SUM(total) AS day_total
+                FROM orders
+                GROUP BY DATE(created_at)
+                ORDER BY day
+            """)
+            for row in cur.fetchall():
+                day_str = str(row["day"])
+                self.daily_sales[day_str] = self.daily_sales.get(day_str, 0) + float(row["day_total"])
+
+            db.close()
+        except Exception as err:
+            # Non-fatal: report page still opens, just shows empty charts
+            print(f"[Report] Could not load history from DB: {err}")
 
     # ── UI BUILD ─────────────────────────────────────────────────────────────
 
@@ -102,8 +123,8 @@ class ReportPage(QWidget):
         nav_layout.setSpacing(8)
 
         for label, icon_path, page_key in [
-            ("  TRANSACTION",       "TRANSACTION.png",       "pos"),
-            ("  INVENTORY", "inventory.png", "inventory"),
+            ("  TRANSACTIONS", "TRANSACTION.png", "pos"),
+            ("  INVENTORY",    "inventory.png",   "inventory"),
         ]:
             btn = QPushButton(label)
             btn.setIcon(QIcon(icon_path))
@@ -121,54 +142,33 @@ class ReportPage(QWidget):
         tbl.addStretch()
         root.addWidget(top_bar)
 
-        # Thin separator
         sep = QFrame()
         sep.setFixedHeight(2)
         sep.setStyleSheet("background-color: #c8b87a;")
         root.addWidget(sep)
 
-        # ── CONTENT ──────────────────────────────────────────────────────────
+        # ── CONTENT SCROLL ───────────────────────────────────────────────────
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
         scroll_area.setStyleSheet("""
-            QScrollArea {
-                border: none;
-                background-color: #EFE9D1;
-            }
-
+            QScrollArea { border: none; background-color: #EFE9D1; }
             QScrollBar:vertical {
-                background: #DED6B2;
-                width: 10px;
-                border-radius: 5px;
-                margin: 4px;
+                background: #DED6B2; width: 10px; border-radius: 5px; margin: 4px;
             }
-
             QScrollBar::handle:vertical {
-                background: #c8b87a;
-                border-radius: 5px;
-                min-height: 30px;
+                background: #c8b87a; border-radius: 5px; min-height: 30px;
             }
-
-            QScrollBar::handle:vertical:hover {
-                background: #b59f5d;
-            }
-
-            QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
+            QScrollBar::handle:vertical:hover { background: #b59f5d; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
         """)
 
         content_area = QWidget()
         content_area.setStyleSheet("background-color: #EFE9D1;")
-
         content_grid = QGridLayout(content_area)
         content_grid.setContentsMargins(24, 20, 24, 20)
         content_grid.setSpacing(18)
-
         scroll_area.setWidget(content_area)
-
         root.addWidget(scroll_area, stretch=1)
 
         # ── TOTAL SALES CARD ─────────────────────────────────────────────────
@@ -197,7 +197,6 @@ class ReportPage(QWidget):
             "font-size: 52px; color: #E8D28C; font-weight: bold; background: transparent;"
         )
         total_inner.addWidget(icon_lbl)
-
         content_grid.addWidget(self.total_card, 0, 0, 1, 2)
 
         # ── PIE CHART PANEL ──────────────────────────────────────────────────
@@ -217,7 +216,6 @@ class ReportPage(QWidget):
         self.pie_canvas.setMinimumHeight(320)
         self.pie_canvas.setStyleSheet("border-radius: 8px;")
         pie_layout.addWidget(self.pie_canvas)
-
         content_grid.addWidget(pie_panel, 1, 0)
         pie_panel.setMinimumHeight(420)
 
@@ -249,7 +247,6 @@ class ReportPage(QWidget):
         self.tracker_layout.setAlignment(Qt.AlignTop)
         scroll.setWidget(scroll_content)
         tracker_outer.addWidget(scroll, stretch=1)
-
         content_grid.addWidget(tracker_panel, 1, 1)
 
         # ── BAR CHART PANEL ──────────────────────────────────────────────────
@@ -269,10 +266,8 @@ class ReportPage(QWidget):
         self.bar_canvas = FigureCanvas(Figure(figsize=(8, 2.4), facecolor="#FFFFFF"))
         self.bar_canvas.setStyleSheet("border-radius: 8px;")
         bar_layout.addWidget(self.bar_canvas)
-
         content_grid.addWidget(bar_panel, 2, 0, 1, 2)
 
-        # Equal column stretch
         content_grid.setColumnStretch(0, 1)
         content_grid.setColumnStretch(1, 1)
 
@@ -283,9 +278,10 @@ class ReportPage(QWidget):
         panel.setStyleSheet("QFrame { background-color: white; border-radius: 14px; }")
         return panel
 
-    # ── DATA UPDATES ─────────────────────────────────────────────────────────
+    # ── DATA UPDATES (called by IMS on complete_order) ────────────────────────
 
     def update_sales(self, items, total):
+        """items = list of (product_name, price). Called live from IMS."""
         if not items:
             return
         for item_name, value in items:
@@ -321,7 +317,6 @@ class ReportPage(QWidget):
             sorted(self.sales_data.items(), key=lambda x: -x[1])
         ):
             percent = (value / total_sales) * 100
-
             row = QFrame()
             row.setStyleSheet(
                 "QFrame { background-color: #fafaf7; border-radius: 8px; border: 1px solid #ede9dc; }"
@@ -331,9 +326,7 @@ class ReportPage(QWidget):
 
             color_dot = QLabel("●")
             dot_color = CHART_COLORS[i % len(CHART_COLORS)]
-            color_dot.setStyleSheet(
-                f"color: {dot_color}; font-size: 18px; background: transparent;"
-            )
+            color_dot.setStyleSheet(f"color: {dot_color}; font-size: 18px; background: transparent;")
             color_dot.setFixedWidth(22)
 
             name_lbl = QLabel(item)
@@ -355,7 +348,6 @@ class ReportPage(QWidget):
             row_layout.addWidget(name_lbl)
             row_layout.addWidget(val_lbl)
             row_layout.addWidget(pct_lbl)
-
             self.tracker_layout.addWidget(row)
 
     # ── CHARTS ───────────────────────────────────────────────────────────────
@@ -363,62 +355,31 @@ class ReportPage(QWidget):
     def plot_pie(self):
         fig = self.pie_canvas.figure
         fig.clear()
-
         ax = fig.add_subplot(111)
         ax.set_facecolor("#FFFFFF")
         fig.patch.set_facecolor("#FFFFFF")
 
         if not self.sales_data:
-            ax.text(
-                0.5, 0.5,
-                "No sales yet",
-                ha="center",
-                va="center",
-                fontsize=13,
-                color="#aaa"
-            )
+            ax.text(0.5, 0.5, "No sales yet", ha="center", va="center", fontsize=13, color="#aaa")
             ax.axis("off")
             self.pie_canvas.draw()
             return
 
         labels = list(self.sales_data.keys())
         values = list(self.sales_data.values())
-
-        colors = [
-            CHART_COLORS[i % len(CHART_COLORS)]
-            for i in range(len(labels))
-        ]
+        colors = [CHART_COLORS[i % len(CHART_COLORS)] for i in range(len(labels))]
 
         wedges, texts, autotexts = ax.pie(
-            values,
-            labels=None,
-            autopct="%1.0f%%",
-            colors=colors,
-            startangle=140,
-            wedgeprops={
-                "linewidth": 2,
-                "edgecolor": "white"
-            },
+            values, labels=None, autopct="%1.0f%%", colors=colors,
+            startangle=140, wedgeprops={"linewidth": 2, "edgecolor": "white"},
             pctdistance=0.75,
         )
-
-        # IMPORTANT
         ax.axis("equal")
-
         for at in autotexts:
             at.set_fontsize(10)
             at.set_color("white")
             at.set_fontweight("bold")
-
-        ax.legend(
-            wedges,
-            labels,
-            loc="center left",
-            bbox_to_anchor=(1, 0, 0.5, 1),
-            fontsize=9,
-            frameon=False,
-        )
-
+        ax.legend(wedges, labels, loc="center left", bbox_to_anchor=(1, 0, 0.5, 1), fontsize=9, frameon=False)
         fig.tight_layout()
         self.pie_canvas.draw()
 
@@ -430,8 +391,7 @@ class ReportPage(QWidget):
         fig.patch.set_facecolor("#FFFFFF")
 
         if not self.daily_sales:
-            ax.text(0.5, 0.5, "No sales yet", ha="center", va="center",
-                    fontsize=13, color="#aaa")
+            ax.text(0.5, 0.5, "No sales yet", ha="center", va="center", fontsize=13, color="#aaa")
             ax.axis("off")
             self.bar_canvas.draw()
             return
@@ -440,23 +400,12 @@ class ReportPage(QWidget):
         values = [self.daily_sales[d] for d in dates]
         x_pos = list(range(len(dates)))
 
-        bars = ax.bar(
-            x_pos, values,
-            width=0.5,
-            color="#34699A",
-            edgecolor="white",
-            linewidth=1.5,
-            zorder=3,
-        )
-
-        # Value labels on bars
+        bars = ax.bar(x_pos, values, width=0.5, color="#34699A", edgecolor="white", linewidth=1.5, zorder=3)
         for bar, val in zip(bars, values):
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
                 bar.get_height() + max(values) * 0.02,
-                f"₱{val:,.0f}",
-                ha="center", va="bottom",
-                fontsize=9, color="#2b2b2b", fontweight="bold",
+                f"₱{val:,.0f}", ha="center", va="bottom", fontsize=9, color="#2b2b2b", fontweight="bold",
             )
 
         ax.set_xticks(x_pos)
@@ -469,12 +418,10 @@ class ReportPage(QWidget):
         ax.spines["bottom"].set_color("#ddd")
         ax.yaxis.grid(True, color="#ede9dc", linestyle="--", linewidth=0.8, zorder=0)
         ax.set_axisbelow(True)
-
         fig.tight_layout()
         self.bar_canvas.draw()
 
 
-# ── ENTRY POINT ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = ReportPage()

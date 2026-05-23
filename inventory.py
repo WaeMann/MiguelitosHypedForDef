@@ -1,17 +1,16 @@
 # This is the inventory.py (Do not remove line)
 
 import sys
-import subprocess
-import mysql.connector
-from script import FLAVORS, FLAVOR_PRICES, FLAVOR_IMAGES, SIZE_MULTIPLIER
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem,
     QLabel, QLineEdit, QFrame, QHeaderView, QMessageBox,
-    QGraphicsDropShadowEffect, QSizePolicy, QScrollArea
+    QGraphicsDropShadowEffect, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QPixmap, QIcon, QIntValidator, QColor, QFont
+from PyQt5.QtGui import QPixmap, QIcon, QIntValidator, QColor
+
+from db import get_db_connection
 
 
 def drop_shadow(widget, blur=25, x=3, y=3, alpha=150):
@@ -128,13 +127,15 @@ class InventoryPage(QWidget):
     def __init__(self, switch_callback=None):
         super().__init__()
         self.switch_callback = switch_callback
-
         self.setWindowTitle("Hyped Mangoes — Inventory")
         self.showMaximized()
         self.selected_row = None
+        # Maps table row index → product DB id
+        self._row_ids = {}
 
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
         self.initUI()
+        self.load_from_db()
 
     def initUI(self):
         root = QVBoxLayout(self)
@@ -192,10 +193,8 @@ class InventoryPage(QWidget):
         top_bar_layout.addStretch()
         top_bar_layout.addLayout(nav_layout)
         top_bar_layout.addStretch()
-
         root.addWidget(top_bar)
 
-        # Thin separator line
         sep = QFrame()
         sep.setFixedHeight(2)
         sep.setStyleSheet("background-color: #c8b87a;")
@@ -209,7 +208,7 @@ class InventoryPage(QWidget):
         content_layout.setSpacing(20)
         root.addWidget(content_area, stretch=1)
 
-        # ── TABLE PANEL ───────────────────────────────────────────────────────
+        # TABLE PANEL
         table_panel = QFrame()
         table_panel.setStyleSheet("QFrame { background-color: white; border-radius: 16px; }")
         drop_shadow(table_panel, blur=30, alpha=120)
@@ -217,7 +216,6 @@ class InventoryPage(QWidget):
         table_panel_layout.setContentsMargins(16, 16, 16, 16)
         table_panel_layout.setSpacing(12)
 
-        # Panel heading
         panel_title = QLabel("📦  Product Inventory")
         panel_title.setStyleSheet(
             "font-size: 20px; font-weight: bold; color: #2b2b2b; background: transparent;"
@@ -225,7 +223,7 @@ class InventoryPage(QWidget):
         table_panel_layout.addWidget(panel_title)
 
         self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["#", "Product Name", "Qty Left", "Available Sizes", "Flavors"])
+        self.table.setHorizontalHeaderLabels(["#", "Product Name", "Qty Left", "Available Sizes", "Category"])
         self.table.setStyleSheet(TABLE_STYLE)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -244,7 +242,7 @@ class InventoryPage(QWidget):
         table_panel_layout.addWidget(self.table)
         content_layout.addWidget(table_panel, stretch=3)
 
-        # ── FORM PANEL ────────────────────────────────────────────────────────
+        # FORM PANEL
         form_panel = QFrame()
         form_panel.setStyleSheet("QFrame { background-color: #E8D28C; border-radius: 16px; }")
         form_panel.setFixedWidth(280)
@@ -260,7 +258,6 @@ class InventoryPage(QWidget):
         form_title.setAlignment(Qt.AlignCenter)
         form_panel_layout.addWidget(form_title)
 
-        # Divider
         div = QFrame()
         div.setFixedHeight(2)
         div.setStyleSheet("background-color: #c8b87a; border-radius: 1px;")
@@ -270,7 +267,8 @@ class InventoryPage(QWidget):
         def field_label(text):
             lbl = QLabel(text)
             lbl.setStyleSheet(
-                "font-size: 12px; font-weight: bold; color: #555; background: transparent; text-transform: uppercase; letter-spacing: 1px;"
+                "font-size: 12px; font-weight: bold; color: #555; background: transparent;"
+                " text-transform: uppercase; letter-spacing: 1px;"
             )
             return lbl
 
@@ -288,7 +286,7 @@ class InventoryPage(QWidget):
         self.expiry.setStyleSheet(INPUT_STYLE)
 
         self.type = QLineEdit()
-        self.type.setPlaceholderText("e.g. Ice Creams")
+        self.type.setPlaceholderText("e.g. Desserts")
         self.type.setStyleSheet(INPUT_STYLE)
 
         form_panel_layout.addWidget(field_label("Product Name"))
@@ -297,9 +295,8 @@ class InventoryPage(QWidget):
         form_panel_layout.addWidget(self.quantity)
         form_panel_layout.addWidget(field_label("Available Sizes"))
         form_panel_layout.addWidget(self.expiry)
-        form_panel_layout.addWidget(field_label("Flavor Category"))
+        form_panel_layout.addWidget(field_label("Category"))
         form_panel_layout.addWidget(self.type)
-
         form_panel_layout.addSpacing(10)
 
         add_btn = QPushButton("＋  ADD ITEM")
@@ -327,7 +324,100 @@ class InventoryPage(QWidget):
 
         content_layout.addWidget(form_panel)
 
-    # ── FUNCTIONS ──────────────────────────────────────────────────────────
+    # ── DB FUNCTIONS ──────────────────────────────────────────────────────────
+
+    def load_from_db(self):
+        """Load all products from DB into the table."""
+        self.table.setRowCount(0)
+        self._row_ids = {}
+        try:
+            db = get_db_connection()
+            cur = db.cursor(dictionary=True)
+            cur.execute("""
+                SELECT p.id, p.product_name, p.stock, p.image_path,
+                       c.category_name
+                FROM products p
+                LEFT JOIN categories c ON p.category_id = c.id
+                ORDER BY c.category_name, p.product_name
+            """)
+            rows = cur.fetchall()
+            db.close()
+
+            for product in rows:
+                row = self.table.rowCount()
+                self.table.insertRow(row)
+                self.table.setRowHeight(row, 40)
+                sizes = "12oz, 16oz"
+                for col, val in enumerate([
+                    str(row + 1),
+                    product["product_name"],
+                    str(product["stock"]),
+                    sizes,
+                    product["category_name"] or "",
+                ]):
+                    self.table.setItem(row, col, self._make_cell(val))
+                self._row_ids[row] = product["id"]
+
+        except Exception as err:
+            QMessageBox.critical(self, "DB Error", f"Could not load products:\n{err}")
+
+    def _save_add_to_db(self, product_name, stock, category_name):
+        """Insert a new product into DB. Returns new product id or None."""
+        try:
+            db = get_db_connection()
+            cur = db.cursor()
+            # Get or create category
+            cur.execute("SELECT id FROM categories WHERE category_name = %s", (category_name,))
+            cat = cur.fetchone()
+            if cat:
+                cat_id = cat[0]
+            else:
+                cur.execute("INSERT INTO categories (category_name) VALUES (%s)", (category_name,))
+                cat_id = cur.lastrowid
+
+            cur.execute(
+                "INSERT INTO products (category_id, product_name, base_price, stock) VALUES (%s, %s, %s, %s)",
+                (cat_id, product_name, 0, int(stock))
+            )
+            new_id = cur.lastrowid
+            db.commit()
+            db.close()
+            return new_id
+        except Exception as err:
+            QMessageBox.critical(self, "DB Error", f"Could not add product:\n{err}")
+            return None
+
+    def _save_update_to_db(self, product_id, product_name, stock, category_name):
+        try:
+            db = get_db_connection()
+            cur = db.cursor()
+            cur.execute("SELECT id FROM categories WHERE category_name = %s", (category_name,))
+            cat = cur.fetchone()
+            if cat:
+                cat_id = cat[0]
+            else:
+                cur.execute("INSERT INTO categories (category_name) VALUES (%s)", (category_name,))
+                cat_id = cur.lastrowid
+            cur.execute(
+                "UPDATE products SET product_name=%s, stock=%s, category_id=%s WHERE id=%s",
+                (product_name, int(stock), cat_id, product_id)
+            )
+            db.commit()
+            db.close()
+        except Exception as err:
+            QMessageBox.critical(self, "DB Error", f"Could not update product:\n{err}")
+
+    def _save_delete_to_db(self, product_id):
+        try:
+            db = get_db_connection()
+            cur = db.cursor()
+            cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
+            db.commit()
+            db.close()
+        except Exception as err:
+            QMessageBox.critical(self, "DB Error", f"Could not delete product:\n{err}")
+
+    # ── TABLE FUNCTIONS ───────────────────────────────────────────────────────
 
     def _make_cell(self, text, align=Qt.AlignCenter):
         item = QTableWidgetItem(text)
@@ -335,18 +425,35 @@ class InventoryPage(QWidget):
         return item
 
     def update_numbers(self):
+        new_ids = {}
         for row in range(self.table.rowCount()):
             self.table.setItem(row, 0, self._make_cell(str(row + 1)))
+            if row in self._row_ids:
+                new_ids[row] = self._row_ids[row]
+        self._row_ids = new_ids
 
     def add_item(self):
         if not self.name.text() or not self.quantity.text():
             QMessageBox.warning(self, "Missing Fields", "Please fill in Product Name and Quantity.")
             return
+
+        new_id = self._save_add_to_db(
+            self.name.text(),
+            self.quantity.text(),
+            self.type.text() or "Other"
+        )
+        if new_id is None:
+            return
+
         row = self.table.rowCount()
         self.table.insertRow(row)
         self.table.setRowHeight(row, 40)
-        for col, val in enumerate(["", self.name.text(), self.quantity.text(), self.expiry.text(), self.type.text()]):
+        for col, val in enumerate([
+            "", self.name.text(), self.quantity.text(),
+            self.expiry.text(), self.type.text()
+        ]):
             self.table.setItem(row, col, self._make_cell(val))
+        self._row_ids[row] = new_id
         self.update_numbers()
         self.clear_inputs()
 
@@ -361,7 +468,18 @@ class InventoryPage(QWidget):
         if self.selected_row is None:
             QMessageBox.warning(self, "No Selection", "Select a row first!")
             return
-        for col, val in enumerate(["", self.name.text(), self.quantity.text(), self.expiry.text(), self.type.text()]):
+        product_id = self._row_ids.get(self.selected_row)
+        if product_id:
+            self._save_update_to_db(
+                product_id,
+                self.name.text(),
+                self.quantity.text(),
+                self.type.text() or "Other"
+            )
+        for col, val in enumerate([
+            "", self.name.text(), self.quantity.text(),
+            self.expiry.text(), self.type.text()
+        ]):
             self.table.setItem(self.selected_row, col, self._make_cell(val))
         self.update_numbers()
         self.clear_inputs()
@@ -371,7 +489,19 @@ class InventoryPage(QWidget):
         if self.selected_row is None:
             QMessageBox.warning(self, "No Selection", "Select a row first!")
             return
+        product_id = self._row_ids.get(self.selected_row)
+        if product_id:
+            reply = QMessageBox.question(
+                self, "Confirm Delete",
+                "Delete this product from the database?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+            self._save_delete_to_db(product_id)
         self.table.removeRow(self.selected_row)
+        if self.selected_row in self._row_ids:
+            del self._row_ids[self.selected_row]
         self.selected_row = None
         self.update_numbers()
         self.clear_inputs()
@@ -383,25 +513,26 @@ class InventoryPage(QWidget):
         self.type.clear()
 
     def reduce_stock(self, sold_items):
-        for name, qty_sold in sold_items:
-            for row in range(self.table.rowCount()):
-                item = self.table.item(row, 1)
-                if item and item.text().strip().lower() == name.strip().lower():
-                    current = int(self.table.item(row, 2).text() or "0")
-                    new_qty = max(0, current - qty_sold)
-                    self.table.setItem(row, 2, self._make_cell(str(new_qty)))
-                    break
+        """Called by IMS after a completed order — updates table and DB."""
+        try:
+            db = get_db_connection()
+            cur = db.cursor()
+            for name, qty_sold in sold_items:
+                cur.execute(
+                    "UPDATE products SET stock = GREATEST(0, stock - %s) WHERE product_name = %s",
+                    (qty_sold, name)
+                )
+            db.commit()
+            db.close()
+        except Exception as err:
+            print(f"[DB] reduce_stock error: {err}")
 
-    def load_flavor_inventory(self):
-        self.table.setRowCount(0)
-        row_index = 0
-        for category, items in FLAVORS.items():
-            for item in items:
-                self.table.insertRow(row_index)
-                self.table.setRowHeight(row_index, 40)
-                sizes = ", ".join(SIZE_MULTIPLIER.keys())
-                for col, val in enumerate([
-                    str(row_index + 1), item, "0", sizes, category
-                ]):
-                    self.table.setItem(row_index, col, self._make_cell(val))
-                row_index += 1
+        # Also refresh table from DB
+        self.load_from_db()
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = InventoryPage()
+    window.show()
+    sys.exit(app.exec_())

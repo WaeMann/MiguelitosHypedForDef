@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
     order_id INT,
     product_id INT,
+    product_name VARCHAR(150),
     quantity INT,
     size_name VARCHAR(20),
     item_price DECIMAL(10,2),
@@ -55,10 +56,19 @@ CREATE TABLE IF NOT EXISTS order_items (
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
+-- INGREDIENTS
+CREATE TABLE IF NOT EXISTS ingredients (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ingredient_name VARCHAR(150) NOT NULL,
+    stock_left INT DEFAULT 0,
+    unit VARCHAR(50),
+    category VARCHAR(100)
+);
+
 -- DEFAULT ADMIN
-INSERT IGNORE INTO users(username,password_hash,role)
+INSERT IGNORE INTO users(username, password_hash, role)
 VALUES(
     'admin',
-    SHA2('admin123',256),
+    SHA2('admin123', 256),
     'admin'
 );

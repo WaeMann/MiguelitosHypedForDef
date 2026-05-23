@@ -1,0 +1,25 @@
+# This is the db.py (Do not remove line)
+# Shared database connection helper for all modules.
+
+import hashlib
+
+try:
+    import mysql.connector
+    DB_AVAILABLE = True
+except ImportError:
+    DB_AVAILABLE = False
+
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def get_db_connection():
+    if not DB_AVAILABLE:
+        raise RuntimeError("mysql-connector-python is not installed. Run: pip install mysql-connector-python")
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="6789",
+        database="pos_system",
+    )

@@ -4,18 +4,18 @@ import sys
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QFrame, QGraphicsDropShadowEffect,
     QPushButton, QScrollArea, QGridLayout, QVBoxLayout, QHBoxLayout,
-    QComboBox, QSplitter, QSizePolicy, QMessageBox, QSpacerItem,
+    QComboBox, QSizePolicy, QMessageBox,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QPixmap
 
-# ---------------------------------------------------------------------------
-# Try importing ReportPage; gracefully skip if not present
-# ---------------------------------------------------------------------------
+from db import get_db_connection
+
 try:
     from report import ReportPage
 except ImportError:
     ReportPage = None
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -28,6 +28,7 @@ def drop_shadow(widget, blur=25, x=3, y=3, alpha=150):
     fx.setColor(QColor(0, 0, 0, alpha))
     widget.setGraphicsEffect(fx)
     return fx
+
 
 NAV_BTN_STYLE = """
 QPushButton {
@@ -113,6 +114,96 @@ class DragScrollArea(QScrollArea):
 
 
 # ---------------------------------------------------------------------------
+# DB helpers
+# ---------------------------------------------------------------------------
+def load_products_from_db():
+    """
+    Returns:
+        categories   : dict  { category_name: [product_dict, ...] }
+        product_map  : dict  { product_name: product_dict }
+        sizes        : list  of size_name strings
+        size_mult    : dict  { size_name: float multiplier }
+    """
+    categories = {}
+    product_map = {}
+    sizes = []
+    size_mult = {}
+
+    try:
+        db = get_db_connection()
+        cur = db.cursor(dictionary=True)
+
+        # Products with category names
+        cur.execute("""
+            SELECT p.id, p.product_name, p.base_price, p.image_path, p.stock,
+                   c.category_name
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            ORDER BY c.category_name, p.product_name
+        """)
+        for row in cur.fetchall():
+            cat = row["category_name"] or "Other"
+            categories.setdefault(cat, [])
+            categories[cat].append(row)
+            product_map[row["product_name"]] = row
+
+        # Sizes
+        cur.execute("SELECT size_name, multiplier FROM sizes ORDER BY multiplier")
+        for row in cur.fetchall():
+            sizes.append(row["size_name"])
+            size_mult[row["size_name"]] = float(row["multiplier"])
+
+        db.close()
+    except Exception as err:
+        print(f"[DB] Could not load products: {err}")
+
+    # Fallback so the UI doesn't crash when DB is empty
+    if not sizes:
+        sizes = ["12oz", "16oz"]
+        size_mult = {"12oz": 1.0, "16oz": 1.3}
+
+    return categories, product_map, sizes, size_mult
+
+
+def save_order_to_db(order_rows, total):
+    """Persist a completed order to the orders / order_items tables."""
+    try:
+        db = get_db_connection()
+        cur = db.cursor()
+
+        cur.execute("INSERT INTO orders (total) VALUES (%s)", (total,))
+        order_id = cur.lastrowid
+
+        for row_data in order_rows:
+            cur.execute("""
+                INSERT INTO order_items
+                    (order_id, product_id, product_name, quantity, size_name, item_price)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                order_id,
+                row_data.get("product_id"),
+                row_data["name"],
+                row_data["qty"],
+                row_data["size"],
+                row_data["price"],
+            ))
+
+        # Reduce stock in products table
+        for row_data in order_rows:
+            if row_data.get("product_id"):
+                cur.execute("""
+                    UPDATE products
+                    SET stock = GREATEST(0, stock - %s)
+                    WHERE id = %s
+                """, (row_data["qty"], row_data["product_id"]))
+
+        db.commit()
+        db.close()
+    except Exception as err:
+        print(f"[DB] Could not save order: {err}")
+
+
+# ---------------------------------------------------------------------------
 # Main window
 # ---------------------------------------------------------------------------
 class IMS(QWidget):
@@ -121,6 +212,7 @@ class IMS(QWidget):
         self.switch_callback = switch_callback
         self.report_page = report_page
         self.inventory_page = inventory_page
+
         self.section_grids = []
         self.menu_cards = []
         self.current_columns = 3
@@ -129,13 +221,14 @@ class IMS(QWidget):
         self.order_total = 0
         self.selected_order_row = None
 
+        # Load from DB
+        self.db_categories, self.product_map, self.sizes, self.size_mult = load_products_from_db()
+
         self.setWindowTitle("Inventory Management System")
         self.setMinimumSize(900, 600)
         self.resize(1350, 700)
-
         self.setStyleSheet("QWidget { background-color: #DED6B2; }")
 
-        # ── Root horizontal layout: sidebar | main area ──────────────────────
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -150,7 +243,6 @@ class IMS(QWidget):
         sidebar_layout.setContentsMargins(27, 10, 11, 10)
         sidebar_layout.setSpacing(12)
 
-        # Logo
         self.title_logo = QLabel()
         self.title_logo.setFixedHeight(110)
         self.title_logo.setAlignment(Qt.AlignCenter)
@@ -158,7 +250,6 @@ class IMS(QWidget):
         self._set_pixmap(self.title_logo, "hypedmangologo.png", 300, 110)
         sidebar_layout.addWidget(self.title_logo)
 
-        # Yellow card
         yellow_card = QFrame()
         yellow_card.setStyleSheet("background-color: #E8D28C; border-radius: 20px;")
         yellow_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -169,7 +260,6 @@ class IMS(QWidget):
         yellow_layout.setContentsMargins(15, 15, 15, 15)
         yellow_layout.setSpacing(8)
 
-        # Item name + price row
         name_price_row = QHBoxLayout()
         self.yellow_text = QLabel("Item Name")
         self.yellow_text.setStyleSheet(
@@ -184,13 +274,10 @@ class IMS(QWidget):
         name_price_row.addWidget(self.price_text)
         yellow_layout.addLayout(name_price_row)
 
-        # Preview image box
         self.red_box = QFrame()
         self.red_box.setStyleSheet("background-color: #EFE9D1; border-radius: 12px;")
-        self.red_box.setMinimumHeight(120)
-        self.red_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.red_box.setFixedHeight(150)
-
+        self.red_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         red_inner = QVBoxLayout(self.red_box)
         red_inner.setContentsMargins(0, 0, 0, 0)
         self.red_image = QLabel()
@@ -199,7 +286,6 @@ class IMS(QWidget):
         red_inner.addWidget(self.red_image)
         yellow_layout.addWidget(self.red_box)
 
-        # Qty / Size / Add Item row
         controls_row = QHBoxLayout()
         controls_row.setSpacing(6)
 
@@ -220,7 +306,7 @@ class IMS(QWidget):
         size_lbl.setAlignment(Qt.AlignCenter)
         size_lbl.setStyleSheet("color: black; font-size: 10px; background: transparent;")
         self.combo2 = QComboBox()
-        self.combo2.addItems(["12oz", "16oz"])
+        self.combo2.addItems(self.sizes)
         self.combo2.setStyleSheet(COMBO_STYLE)
         self.combo2.currentIndexChanged.connect(self.update_price_display)
         size_col.addWidget(size_lbl)
@@ -237,7 +323,6 @@ class IMS(QWidget):
         controls_row.addWidget(self.add_item_btn, alignment=Qt.AlignBottom)
         yellow_layout.addLayout(controls_row)
 
-        # Order scroll
         self.order_scroll = DragScrollArea()
         self.order_scroll.setWidgetResizable(True)
         self.order_scroll.setStyleSheet("""
@@ -254,7 +339,6 @@ class IMS(QWidget):
         self.order_content.setStyleSheet("background-color: white;")
         yellow_layout.addWidget(self.order_scroll, stretch=1)
 
-        # Total + Complete Order row
         bottom_row = QHBoxLayout()
         self.total_label = QLabel("Total: ₱0")
         self.total_label.setStyleSheet(
@@ -277,16 +361,14 @@ class IMS(QWidget):
         main_area_layout.setContentsMargins(0, 0, 0, 0)
         main_area_layout.setSpacing(0)
 
-        # ── TOP BAR ──────────────────────────────────────────────────────────
+        # TOP BAR
         top_bar = QFrame()
         top_bar.setFixedHeight(80)
         top_bar.setStyleSheet("background-color: #DED6B2;")
-
         top_bar_layout = QHBoxLayout(top_bar)
         top_bar_layout.setContentsMargins(24, 0, 125, 0)
         top_bar_layout.setSpacing(10)
 
-        # Navigation buttons layout
         nav_layout = QHBoxLayout()
         nav_layout.setSpacing(8)
 
@@ -303,13 +385,11 @@ class IMS(QWidget):
         nav_layout.addWidget(self.inventory_top_btn)
         nav_layout.addWidget(self.report_top_btn)
 
-        # Logout button
         self.admin_btn = QPushButton("LOG OUT")
         self.admin_btn.setFixedSize(150, 36)
         self.admin_btn.setStyleSheet(NAV_BTN_STYLE)
         drop_shadow(self.admin_btn, blur=18, alpha=100)
 
-        # Layout positioning
         top_bar_layout.addStretch()
         top_bar_layout.addLayout(nav_layout)
         top_bar_layout.addStretch()
@@ -318,16 +398,12 @@ class IMS(QWidget):
         main_area_layout.addWidget(top_bar)
 
         if self.switch_callback:
-            self.report_top_btn.clicked.connect(
-                lambda: self.switch_callback("report")
-            )
-            self.inventory_top_btn.clicked.connect(
-                lambda: self.switch_callback("inventory")
-            )
+            self.report_top_btn.clicked.connect(lambda: self.switch_callback("report"))
+            self.inventory_top_btn.clicked.connect(lambda: self.switch_callback("inventory"))
 
         self.admin_btn.clicked.connect(self.admin_clicked)
 
-        # ── MENU SCROLL AREA ─────────────────────────────────────────────────
+        # MENU SCROLL AREA
         self.scroll_area = DragScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setStyleSheet("background-color: #EFE9D1; border: none;")
@@ -338,12 +414,18 @@ class IMS(QWidget):
         menu_layout.setContentsMargins(20, 20, 20, 20)
         menu_layout.setSpacing(30)
 
-        for title, items in FLAVORS.items():
-            menu_layout.addWidget(self._create_section(title, items))
+        if self.db_categories:
+            for category_name, products in self.db_categories.items():
+                menu_layout.addWidget(self._create_section(category_name, products))
+        else:
+            lbl = QLabel("No products found in database.\nPlease run seed_products.sql first.")
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet("font-size: 16px; color: #666;")
+            menu_layout.addWidget(lbl)
 
         main_area_layout.addWidget(self.scroll_area, stretch=1)
 
-        # ── CHANGE ORDER DETAILS BAR ─────────────────────────────────────────
+        # CHANGE ORDER DETAILS BAR
         self.bottom_box = QFrame()
         self.bottom_box.setFixedHeight(100)
         self.bottom_box.setStyleSheet(
@@ -374,7 +456,7 @@ class IMS(QWidget):
         self.bottom_combo1.setStyleSheet(COMBO_STYLE)
 
         self.bottom_combo2 = QComboBox()
-        self.bottom_combo2.addItems(["12oz", "16oz"])
+        self.bottom_combo2.addItems(self.sizes)
         self.bottom_combo2.setFixedWidth(100)
         self.bottom_combo2.setStyleSheet(COMBO_STYLE)
 
@@ -388,7 +470,6 @@ class IMS(QWidget):
         self.apply_changes_btn.setFixedHeight(40)
         self.apply_changes_btn.clicked.connect(self.apply_changes)
 
-        # Small preview image in bottom bar
         self.redd_box = QFrame()
         self.redd_box.setFixedSize(80, 80)
         self.redd_box.setStyleSheet("background-color: #DED6B2; border-radius: 10px;")
@@ -408,15 +489,14 @@ class IMS(QWidget):
         main_area_layout.addWidget(self.bottom_box)
         self.bottom_box.hide()
 
-        # Event filter to auto-hide bottom box on outside click
         self.scroll_area.viewport().installEventFilter(self)
         self.scroll_content.installEventFilter(self)
         self.installEventFilter(self)
 
     # -------------------------------------------------------------------------
-    # Section builder
+    # Section builder — now receives list of product dicts from DB
     # -------------------------------------------------------------------------
-    def _create_section(self, title, items):
+    def _create_section(self, title, products):
         section = QWidget()
         layout = QVBoxLayout(section)
         layout.setSpacing(10)
@@ -427,18 +507,30 @@ class IMS(QWidget):
 
         grid = QGridLayout()
         grid.setSpacing(15)
-
         cards = []
 
-        for i, name in enumerate(items):
+        for product in products:
+            name = product["product_name"]
+            image_path = product.get("image_path") or "images/default.png"
+            stock = product.get("stock", 0)
+
             card = QFrame()
             card.setFixedSize(250, 150)
-            card.setStyleSheet("""
-                QFrame { background-color: #E8D28C; border-radius: 15px; }
-                QFrame:hover { background-color: #D9BE70; }
-            """)
+
+            if stock <= 0:
+                card.setStyleSheet("""
+                    QFrame { background-color: #cccccc; border-radius: 15px; }
+                """)
+            else:
+                card.setStyleSheet("""
+                    QFrame { background-color: #E8D28C; border-radius: 15px; }
+                    QFrame:hover { background-color: #D9BE70; }
+                """)
+
             drop_shadow(card, blur=25, alpha=150)
-            card.mousePressEvent = lambda e, n=name: self.item_clicked(n)
+
+            if stock > 0:
+                card.mousePressEvent = lambda e, n=name: self.item_clicked(n)
 
             vbox = QVBoxLayout(card)
             vbox.setAlignment(Qt.AlignCenter)
@@ -447,14 +539,9 @@ class IMS(QWidget):
             img = QLabel()
             img.setAlignment(Qt.AlignCenter)
             img.setStyleSheet("background: transparent;")
-
-            path = FLAVOR_IMAGES.get(name, "images/default.png")
-            px = QPixmap(path)
-
+            px = QPixmap(image_path)
             if not px.isNull():
-                img.setPixmap(
-                    px.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                )
+                img.setPixmap(px.scaled(60, 60, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             else:
                 img.setText("No Image")
 
@@ -462,15 +549,19 @@ class IMS(QWidget):
             text.setAlignment(Qt.AlignCenter)
             text.setStyleSheet("color: #2b2b2b; font-weight: bold;")
 
+            stock_lbl = QLabel(f"Stock: {stock}")
+            stock_lbl.setAlignment(Qt.AlignCenter)
+            stock_lbl.setStyleSheet("color: #555; font-size: 11px;")
+
             vbox.addWidget(img)
             vbox.addWidget(text)
+            vbox.addWidget(stock_lbl)
 
             cards.append(card)
 
         self.section_grids.append(grid)
         self.menu_cards.append(cards)
 
-        # Initial layout
         for i, card in enumerate(cards):
             row, col = divmod(i, 3)
             grid.addWidget(card, row, col)
@@ -480,8 +571,6 @@ class IMS(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-
-        # Determine column count
         if self.width() < 800:
             columns = 1
         elif self.width() < 1200:
@@ -489,28 +578,17 @@ class IMS(QWidget):
         else:
             columns = 3
 
-        # Prevent unnecessary rebuilding
         if hasattr(self, "current_columns") and self.current_columns == columns:
             return
-
         self.current_columns = columns
 
         for grid, cards in zip(self.section_grids, self.menu_cards):
-
-            # Remove items safely WITHOUT deleting widgets
             while grid.count():
-                item = grid.takeAt(0)
-
-            # Re-add widgets
+                grid.takeAt(0)
             for i, card in enumerate(cards):
-                row = i // columns
-                col = i % columns
-                grid.addWidget(card, row, col)
+                grid.addWidget(card, i // columns, i % columns)
 
-    # -------------------------------------------------------------------------
-    # Pixmap helper
-    # -------------------------------------------------------------------------
-    def _set_pixmap(self, label: QLabel, path: str, w: int, h: int):
+    def _set_pixmap(self, label, path, w, h):
         px = QPixmap(path)
         if not px.isNull():
             label.setPixmap(px.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
@@ -525,23 +603,27 @@ class IMS(QWidget):
         self.selected_item = name
         self.yellow_text.setText(name)
         self.update_price_display()
-        self.set_menu_preview_image(FLAVOR_IMAGES.get(name, "images/default.png"))
+        product = self.product_map.get(name, {})
+        image_path = product.get("image_path") or "images/default.png"
+        self.set_menu_preview_image(image_path)
 
     def update_price_display(self):
         if not self.selected_item:
             return
-        base = FLAVOR_PRICES.get(self.selected_item, 0)
+        product = self.product_map.get(self.selected_item, {})
+        base = float(product.get("base_price", 0))
         size = self.combo2.currentText()
-        final = int(base * SIZE_MULTIPLIER.get(size, 1))
+        final = int(base * self.size_mult.get(size, 1.0))
         self.price_text.setText(f"₱{final}")
 
     def button_clicked(self):
         if not self.selected_item:
             return
+        product = self.product_map.get(self.selected_item, {})
         qty = int(self.combo1.currentText())
         size = self.combo2.currentText()
-        base = FLAVOR_PRICES.get(self.selected_item, 0)
-        price = int(base * SIZE_MULTIPLIER.get(size, 1)) * qty
+        base = float(product.get("base_price", 0))
+        price = int(base * self.size_mult.get(size, 1.0)) * qty
 
         self.order_total += price
         self.total_label.setText(f"Total: ₱{self.order_total}")
@@ -551,13 +633,15 @@ class IMS(QWidget):
         row.setStyleSheet("QFrame { background-color: #f5f5f5; border-radius: 6px; }")
         row.data = {
             "name": self.selected_item,
+            "product_id": product.get("id"),
             "qty": qty,
             "size": size,
             "price": price,
-            "image": FLAVOR_IMAGES.get(self.selected_item, "images/default.png"),
+            "image": product.get("image_path") or "images/default.png",
         }
 
-        g = QGridLayout(row)
+        from PyQt5.QtWidgets import QGridLayout as _GL
+        g = _GL(row)
         g.setContentsMargins(8, 4, 8, 4)
 
         row.name_label  = QLabel(self.selected_item)
@@ -586,7 +670,6 @@ class IMS(QWidget):
                 w.setStyleSheet("QFrame { background-color: #f5f5f5; border-radius: 6px; }")
 
         row.setStyleSheet("QFrame { background-color: #cce5ff; border-radius: 6px; }")
-
         self.change_text.setText(
             f"ITEMS TO BE CHANGED: {row.data['name']} | "
             f"Q: {row.data['qty']} | S: {row.data['size']} | ₱{row.data['price']}"
@@ -611,8 +694,9 @@ class IMS(QWidget):
         row = self.selected_order_row
         new_qty  = int(self.bottom_combo1.currentText())
         new_size = self.bottom_combo2.currentText()
-        base     = FLAVOR_PRICES.get(row.data["name"], 0)
-        new_price = int(base * SIZE_MULTIPLIER.get(new_size, 1)) * new_qty
+        product  = self.product_map.get(row.data["name"], {})
+        base     = float(product.get("base_price", 0))
+        new_price = int(base * self.size_mult.get(new_size, 1.0)) * new_qty
 
         self.order_total = max(0, self.order_total - row.data["price"] + new_price)
         self.total_label.setText(f"Total: ₱{self.order_total}")
@@ -621,29 +705,42 @@ class IMS(QWidget):
         row.qty_label.setText(f"Q: {new_qty}")
         row.size_label.setText(f"S: {new_size}")
         row.price_label.setText(f"₱{new_price}")
-
         self.change_text.setText(
             f"ITEMS TO BE CHANGED: {row.data['name']} | "
             f"Q: {new_qty} | S: {new_size} | ₱{new_price}"
         )
 
     def complete_order(self):
+        if self.order_total == 0:
+            QMessageBox.warning(self, "Empty Order", "Please add items before completing an order.")
+            return
+
         QMessageBox.information(self, "Order Complete", f"Total Price: ₱{self.order_total}")
 
+        # Collect order rows
+        order_rows = []
         report_items = []
         inventory_items = []
 
         for i in range(self.order_layout.count()):
             w = self.order_layout.itemAt(i).widget()
             if w and hasattr(w, "data"):
+                order_rows.append(w.data)
                 report_items.append((w.data["name"], w.data["price"]))
                 inventory_items.append((w.data["name"], int(w.data["qty"])))
 
+        # Save to DB
+        save_order_to_db(order_rows, self.order_total)
+
+        # Notify report page
         if self.report_page:
             self.report_page.update_sales(report_items, self.order_total)
+
+        # Notify inventory page
         if self.inventory_page:
             self.inventory_page.reduce_stock(inventory_items)
 
+        # Clear order list
         for i in reversed(range(self.order_layout.count())):
             item = self.order_layout.itemAt(i)
             if item and item.widget():
@@ -680,8 +777,7 @@ class IMS(QWidget):
 
     def admin_clicked(self):
         import subprocess
-        subprocess.Popen([sys.executable, "login.py"])
-        self.close()
+        subprocess.Popen([sys.executable, "main.py"])
         QApplication.quit()
 
     def center(self):

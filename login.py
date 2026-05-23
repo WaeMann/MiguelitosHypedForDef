@@ -2,7 +2,6 @@
 
 import sys
 import os
-import hashlib
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
@@ -11,33 +10,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import (
     QColor, QPixmap, QPainter, QBrush, QPen, QPolygonF,
-    QLinearGradient, QFont,
+    QFont,
 )
-from PyQt5.QtCore import Qt, QPointF, QRectF
+from PyQt5.QtCore import Qt, QPointF
 
-try:
-    import mysql.connector
-    DB_AVAILABLE = True
-except ImportError:
-    DB_AVAILABLE = False
-
-
-# ---------------------------------------------------------------------------
-# Utilities
-# ---------------------------------------------------------------------------
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
-
-
-def get_db_connection():
-    if not DB_AVAILABLE:
-        raise RuntimeError("mysql-connector-python is not installed.")
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="",
-        database="pos_system",
-    )
+from db import hash_password, get_db_connection
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +93,6 @@ class CreateAccountDialog(QDialog):
             )
         )
         layout.addWidget(show_cb)
-
         layout.addStretch()
 
         btn = QPushButton("Create")
@@ -137,6 +113,7 @@ class CreateAccountDialog(QDialog):
             cur.execute("SELECT username FROM users WHERE username = %s", (u,))
             if cur.fetchone():
                 QMessageBox.critical(self, "Error", "Username already exists.")
+                db.close()
                 return
             cur.execute(
                 "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, 'cashier')",
@@ -198,7 +175,6 @@ class ResetPasswordDialog(QDialog):
         show_cb = QCheckBox("Show Password")
         show_cb.toggled.connect(self._toggle_pw)
         layout.addWidget(show_cb)
-
         layout.addStretch()
 
         btn = QPushButton("Confirm")
@@ -248,8 +224,6 @@ class ResetPasswordDialog(QDialog):
 # Custom painted background widget
 # ---------------------------------------------------------------------------
 class LoginBackground(QWidget):
-    """Paints the cream + yellow diagonal split, matching the original tkinter canvas."""
-
     CREAM  = QColor("#FFF8E7")
     YELLOW = QColor("#FFD700")
     GREEN  = QColor("#008000")
@@ -266,10 +240,8 @@ class LoginBackground(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         w, h = self.width(), self.height()
 
-        # Cream background
         painter.fillRect(0, 0, w, h, self.CREAM)
 
-        # Yellow polygon (right side, mirroring the tkinter canvas)
         poly = QPolygonF([
             QPointF(0.75 * w, 0),
             QPointF(w, 0),
@@ -280,12 +252,10 @@ class LoginBackground(QWidget):
         painter.setPen(Qt.NoPen)
         painter.drawPolygon(poly)
 
-        # Green divider line
         pen = QPen(self.GREEN, 6)
         painter.setPen(pen)
         painter.drawLine(QPointF(0.75 * w, 0), QPointF(0.55 * w, h))
 
-        # Logo (left side, centred)
         if self._logo_pixmap and not self._logo_pixmap.isNull():
             logo_w, logo_h = 220, 220
             scaled = self._logo_pixmap.scaled(
@@ -309,9 +279,6 @@ class LoginWindow(QDialog):
         self.resize(1200, 600)
         self.setMinimumSize(800, 480)
 
-
-
-        # Root layout – background fills everything
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -319,7 +286,6 @@ class LoginWindow(QDialog):
         self.bg = LoginBackground(self)
         root.addWidget(self.bg)
 
-        # Form is overlaid on the right portion using a child layout on bg
         self._build_form()
         self.form_widget.adjustSize()
         self._center_window()
@@ -333,8 +299,6 @@ class LoginWindow(QDialog):
         self._reposition_form()
 
     def _build_form(self):
-        """Build the login form as a transparent overlay on the background."""
-        # Transparent container floated over the background
         self.form_widget = QWidget(self.bg)
         self.form_widget.setAttribute(Qt.WA_TranslucentBackground)
         self.form_widget.setFixedWidth(280)
@@ -344,14 +308,12 @@ class LoginWindow(QDialog):
         layout.setSpacing(14)
         layout.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
 
-        # Title
         title = QLabel("Log-In")
         title.setFont(QFont("Cambria", 18, QFont.Bold))
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("color: #333333;")
         layout.addWidget(title)
 
-        # Input style
         field_style = """
         QLineEdit {
             background: white;
@@ -380,7 +342,6 @@ class LoginWindow(QDialog):
         self.password_edit.returnPressed.connect(self.authenticate)
         layout.addWidget(self.password_edit)
 
-        # Links row
         links_row = QHBoxLayout()
         forgot_btn = self._link_button("Forgot Password?")
         forgot_btn.clicked.connect(self.handle_forgot_password)
@@ -391,7 +352,6 @@ class LoginWindow(QDialog):
         links_row.addWidget(create_btn)
         layout.addLayout(links_row)
 
-        # Login button
         login_btn = QPushButton("Let's Go!")
         login_btn.setFixedHeight(42)
         login_btn.setCursor(Qt.PointingHandCursor)
@@ -403,12 +363,8 @@ class LoginWindow(QDialog):
                 border: none;
                 border-radius: 14px;
             }
-            QPushButton:hover {
-                background-color: #D9BE70;
-            }
-            QPushButton:pressed {
-                background-color: #C9A850;
-            }
+            QPushButton:hover { background-color: #D9BE70; }
+            QPushButton:pressed { background-color: #C9A850; }
         """)
         login_btn.clicked.connect(self.authenticate)
         layout.addWidget(login_btn)
@@ -431,22 +387,13 @@ class LoginWindow(QDialog):
         return btn
 
     def _reposition_form(self):
-        """Keep the form centred in the right (yellow) section."""
         self.form_widget.adjustSize()
-
         w = self.bg.width()
         h = self.bg.height()
-
-        # Right yellow area
         right_x = int(0.55 * w)
         right_w = w - right_x
-
-        # Center horizontally inside right section
         form_x = right_x + (right_w - self.form_widget.width()) // 2
-
-        # Center vertically on whole window
         form_y = (h - self.form_widget.height()) // 2
-
         self.form_widget.move(form_x, form_y)
 
     def showEvent(self, event):
@@ -483,13 +430,8 @@ class LoginWindow(QDialog):
             db.close()
 
             if user:
-                role = user["role"]
-                self.result_data = {
-                    "username": username,
-                    "role": role
-                }
-                self.accept()  # closes login properly
-                return
+                self.result_data = {"username": username, "role": user["role"]}
+                self.accept()
             else:
                 QMessageBox.critical(self, "Error", "Invalid username or password.")
         except Exception as err:
@@ -503,14 +445,12 @@ class LoginWindow(QDialog):
         if username.lower() == "admin":
             QMessageBox.critical(self, "Access Denied", "Admin password cannot be changed via this feature.")
             return
-
         try:
             db = get_db_connection()
             cur = db.cursor(dictionary=True)
             cur.execute("SELECT role FROM users WHERE username = %s", (username,))
             user = cur.fetchone()
             db.close()
-
             if user and user["role"] == "cashier":
                 dlg = ResetPasswordDialog(username, parent=self)
                 dlg.exec_()
