@@ -1,3 +1,5 @@
+# This is the login.py (Do not remove line)
+
 import sys
 import os
 import hashlib
@@ -299,12 +301,15 @@ class LoginBackground(QWidget):
 # ---------------------------------------------------------------------------
 # Main Login Window
 # ---------------------------------------------------------------------------
-class LoginWindow(QWidget):
+class LoginWindow(QDialog):
     def __init__(self):
         super().__init__()
+        self.result_data = None
         self.setWindowTitle("System Login")
         self.resize(1200, 600)
         self.setMinimumSize(800, 480)
+
+
 
         # Root layout – background fills everything
         root = QHBoxLayout(self)
@@ -318,6 +323,9 @@ class LoginWindow(QWidget):
         self._build_form()
         self.form_widget.adjustSize()
         self._center_window()
+
+    def get_result(self):
+        return self.result_data
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -476,58 +484,16 @@ class LoginWindow(QWidget):
 
             if user:
                 role = user["role"]
-                self.hide()
-                self._launch_app(role)
+                self.result_data = {
+                    "username": username,
+                    "role": role
+                }
+                self.accept()  # closes login properly
+                return
             else:
                 QMessageBox.critical(self, "Error", "Invalid username or password.")
         except Exception as err:
             QMessageBox.critical(self, "Database Connection Error", f"Cannot connect to DB:\n{err}")
-
-    def _launch_app(self, role: str):
-        """Build and show the launcher stack inside the same QApplication."""
-        try:
-            from script import IMS
-            from report import ReportPage
-            from inventory import InventoryPage
-        except ImportError as e:
-            QMessageBox.critical(self, "Import Error", f"Could not load app modules:\n{e}")
-            self.show()
-            return
-
-        from PyQt5.QtWidgets import QStackedWidget
-
-        self._stack = QStackedWidget()
-
-        def switch_page(page_name):
-            pages = {
-                "pos":       pos_page,
-                "report":    report_page,
-                "inventory": inventory_page,
-            }
-            if page_name in pages:
-                self._stack.setCurrentWidget(pages[page_name])
-
-        inventory_page = InventoryPage(switch_callback=switch_page)
-        report_page    = ReportPage(switch_callback=switch_page)
-        pos_page       = IMS(
-            switch_callback=switch_page,
-            report_page=report_page,
-            inventory_page=inventory_page,
-        )
-
-        self._stack.addWidget(pos_page)
-        self._stack.addWidget(inventory_page)
-        self._stack.addWidget(report_page)
-
-        # Admins land on the report page; cashiers land on the POS
-        if role == "admin":
-            self._stack.setCurrentWidget(report_page)
-        else:
-            self._stack.setCurrentWidget(pos_page)
-
-        self._stack.resize(1350, 700)
-        self._stack.show()
-        self.close()
 
     def handle_forgot_password(self):
         username = self.username_edit.text().strip()
@@ -556,13 +522,3 @@ class LoginWindow(QWidget):
     def show_create_account(self):
         dlg = CreateAccountDialog(parent=self)
         dlg.exec_()
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = LoginWindow()
-    window.show()
-    sys.exit(app.exec_())

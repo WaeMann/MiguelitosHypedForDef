@@ -1,3 +1,5 @@
+# This is the script.py (Do not remove line)
+
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QFrame, QGraphicsDropShadowEffect,
@@ -14,68 +16,6 @@ try:
     from report import ReportPage
 except ImportError:
     ReportPage = None
-
-# ---------------------------------------------------------------------------
-# Data
-# ---------------------------------------------------------------------------
-FLAVORS = {
-    "Ice Creams": [
-        "Vanilla Ice Cream",
-        "Chocolate Ice Cream",
-        "Strawberry Ice Cream",
-        "Mango Ice Cream",
-        "Hiyuki-Onna Cream",
-    ],
-    "Floats": [
-        "Mint Chocolate Chip Float",
-        "Rocky Road Float",
-        "Cookies & Cream Float",
-        "Chocolate Cola Float",
-    ],
-    "Shakes": [
-        "Chocolate Shake",
-        "Vanilla Shake",
-        "Strawberry Shake",
-        "Ube Shake",
-    ],
-}
-
-FLAVOR_IMAGES = {
-    "Vanilla Ice Cream":        "miguelitos_mangocheesecake.png",
-    "Chocolate Ice Cream":      "miguelitos_mangosago.png",
-    "Strawberry Ice Cream":     "images/strawberry.png",
-    "Mango Ice Cream":          "miguelitos_hypedmango.png",
-    "Hiyuki-Onna Cream":        "YuCream.jpg",
-    "Mint Chocolate Chip Float":"miguelitos_mangojuice.png",
-    "Rocky Road Float":         "chisapiano.jpg",
-    "Cookies & Cream Float":    "miguelitos_mangoshake.png",
-    "Chocolate Cola Float":     "miguelitos_nuttymango.png",
-    "Chocolate Shake":          "miguelitos_mangosupreme.png",
-    "Vanilla Shake":            "miguelitos_purpleyamango.png",
-    "Strawberry Shake":         "miguelitos_ubemangocone.png",
-    "Ube Shake":                "raidenwoofwoof.jpg",
-}
-
-FLAVOR_PRICES = {
-    "Vanilla Ice Cream":        45,
-    "Chocolate Ice Cream":      50,
-    "Strawberry Ice Cream":     55,
-    "Mango Ice Cream":          60,
-    "Hiyuki-Onna Cream":        80,
-    "Mint Chocolate Chip Float":70,
-    "Rocky Road Float":         75,
-    "Cookies & Cream Float":    75,
-    "Chocolate Cola Float":     65,
-    "Chocolate Shake":          60,
-    "Vanilla Shake":            55,
-    "Strawberry Shake":         65,
-    "Ube Shake":                70,
-}
-
-SIZE_MULTIPLIER = {
-    "12oz": 1.0,
-    "16oz": 1.3,
-}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -341,34 +281,50 @@ class IMS(QWidget):
         top_bar = QFrame()
         top_bar.setFixedHeight(80)
         top_bar.setStyleSheet("background-color: #DED6B2;")
+
         top_bar_layout = QHBoxLayout(top_bar)
-        top_bar_layout.setContentsMargins(30, 0, 30, 0)
+        top_bar_layout.setContentsMargins(24, 0, 125, 0)
         top_bar_layout.setSpacing(10)
 
+        # Navigation buttons layout
+        nav_layout = QHBoxLayout()
+        nav_layout.setSpacing(8)
+
         self.inventory_top_btn = QPushButton("INVENTORY")
-        self.inventory_top_btn.setFixedSize(140, 35)
+        self.inventory_top_btn.setFixedSize(130, 36)
         self.inventory_top_btn.setStyleSheet(NAV_BTN_STYLE)
-        drop_shadow(self.inventory_top_btn, blur=20, alpha=120)
+        drop_shadow(self.inventory_top_btn, blur=18, alpha=100)
 
         self.report_top_btn = QPushButton("REPORT")
-        self.report_top_btn.setFixedSize(140, 35)
+        self.report_top_btn.setFixedSize(130, 36)
         self.report_top_btn.setStyleSheet(NAV_BTN_STYLE)
-        drop_shadow(self.report_top_btn, blur=20, alpha=120)
+        drop_shadow(self.report_top_btn, blur=18, alpha=100)
 
+        nav_layout.addWidget(self.inventory_top_btn)
+        nav_layout.addWidget(self.report_top_btn)
+
+        # Logout button
         self.admin_btn = QPushButton("LOG OUT")
-        self.admin_btn.setFixedSize(150, 35)
+        self.admin_btn.setFixedSize(150, 36)
         self.admin_btn.setStyleSheet(NAV_BTN_STYLE)
-        drop_shadow(self.admin_btn, blur=20, alpha=120)
+        drop_shadow(self.admin_btn, blur=18, alpha=100)
 
-        top_bar_layout.addWidget(self.inventory_top_btn)
-        top_bar_layout.addWidget(self.report_top_btn)
+        # Layout positioning
+        top_bar_layout.addStretch()
+        top_bar_layout.addLayout(nav_layout)
         top_bar_layout.addStretch()
         top_bar_layout.addWidget(self.admin_btn)
+
         main_area_layout.addWidget(top_bar)
 
         if self.switch_callback:
-            self.report_top_btn.clicked.connect(lambda: self.switch_callback("report"))
-            self.inventory_top_btn.clicked.connect(lambda: self.switch_callback("inventory"))
+            self.report_top_btn.clicked.connect(
+                lambda: self.switch_callback("report")
+            )
+            self.inventory_top_btn.clicked.connect(
+                lambda: self.switch_callback("inventory")
+            )
+
         self.admin_btn.clicked.connect(self.admin_clicked)
 
         # ── MENU SCROLL AREA ─────────────────────────────────────────────────

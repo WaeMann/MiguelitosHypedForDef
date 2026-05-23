@@ -14,7 +14,7 @@ CREATE TABLE users (
 );
 
 -- Insert Default Accounts (Passwords: admin123 and register1)
-INSERT INTO users (username, password_hash, role) VALUES 
+INSERT INTO users (username, password_hash, role) VALUES
 ('admin', SHA2('admin123', 256), 'admin'),
 ('cashier', SHA2('register1', 256), 'cashier');
 
@@ -25,7 +25,7 @@ CREATE TABLE inventory (
     product_id INT AUTO_INCREMENT PRIMARY KEY,
     product_name VARCHAR(100) NOT NULL,
     quantity INT NOT NULL,
-    available_sizes VARCHAR(100), 
+    available_sizes VARCHAR(100),
     flavors VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -58,7 +58,7 @@ CREATE TABLE inventory_history (
 -- 4. Daily Report View
 -- =========================
 CREATE VIEW daily_report AS
-SELECT 
+SELECT
     DATE(sale_date) AS day,
     SUM(total_price) AS total_income,
     SUM(quantity_sold) AS total_items_sold
@@ -69,7 +69,7 @@ GROUP BY DATE(sale_date);
 -- 5. Weekly Report View
 -- =========================
 CREATE VIEW weekly_report AS
-SELECT 
+SELECT
     YEARWEEK(sale_date, 1) AS week,
     SUM(total_price) AS total_income,
     SUM(quantity_sold) AS total_items_sold
@@ -80,7 +80,7 @@ GROUP BY YEARWEEK(sale_date, 1);
 -- 6. Monthly Report View
 -- =========================
 CREATE VIEW monthly_report AS
-SELECT 
+SELECT
     DATE_FORMAT(sale_date, '%Y-%m') AS month,
     SUM(total_price) AS total_income,
     SUM(quantity_sold) AS total_items_sold
@@ -91,7 +91,7 @@ GROUP BY DATE_FORMAT(sale_date, '%Y-%m');
 -- 7. Income Trend Analysis View
 -- =========================
 CREATE VIEW income_trend AS
-SELECT 
+SELECT
     sale_date,
     total_price,
     SUM(total_price) OVER (ORDER BY sale_date) AS cumulative_income
@@ -101,6 +101,6 @@ FROM sales;
 -- 8. Sample Insert
 -- =========================
 INSERT INTO inventory (product_name, quantity, oz, price)
-VALUES 
+VALUES
 ('Product A', 100, 12.5, 50.00),
 ('Product B', 200, 8.0, 30.00);
