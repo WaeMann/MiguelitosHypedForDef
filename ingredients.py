@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QFrame, QHeaderView, QMessageBox,
     QGraphicsDropShadowEffect, QSizePolicy
 )
+from PyQt5.QtGui import QPixmap, QIcon, QIntValidator, QColor, QMouseEvent
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QIcon, QIntValidator, QColor
 
@@ -122,6 +123,49 @@ QScrollBar::handle:vertical {
 }
 """
 
+class DragScrollTable(QTableWidget):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.setHorizontalScrollMode(QTableWidget.ScrollPerPixel)
+        self.setVerticalScrollMode(QTableWidget.ScrollPerPixel)
+
+        self._dragging = False
+        self._last_pos = None
+
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._dragging = True
+            self._last_pos = event.pos()
+            self.setCursor(Qt.ClosedHandCursor)
+
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._dragging and self._last_pos:
+            delta = event.pos() - self._last_pos
+
+            self.horizontalScrollBar().setValue(
+                self.horizontalScrollBar().value() - delta.x()
+            )
+            self.verticalScrollBar().setValue(
+                self.verticalScrollBar().value() - delta.y()
+            )
+
+            self._last_pos = event.pos()
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._dragging = False
+        self._last_pos = None
+        self.setCursor(Qt.ArrowCursor)
+
+        super().mouseReleaseEvent(event)
+
 
 class IngredientsPage(QWidget):
     def __init__(self, switch_callback=None):
@@ -208,7 +252,7 @@ class IngredientsPage(QWidget):
         )
         table_panel_layout.addWidget(panel_title)
 
-        self.table = QTableWidget(0, 5)
+        self.table = DragScrollTable(0, 5)
         self.table.setHorizontalHeaderLabels(["#", "Ingredient Name", "Stock Left", "Unit", "Category"])
         self.table.setStyleSheet(TABLE_STYLE)
         self.table.setAlternatingRowColors(True)
@@ -221,7 +265,7 @@ class IngredientsPage(QWidget):
 
         header = self.table.horizontalHeader()
         header.setStretchLastSection(True)
-        header.setSectionResizeMode(QHeaderView.Stretch)
+        header.setSectionResizeMode(QHeaderView.Interactive)
         header.setDefaultAlignment(Qt.AlignCenter)
 
         table_panel_layout.addWidget(self.table)

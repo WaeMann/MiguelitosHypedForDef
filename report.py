@@ -18,6 +18,38 @@ from matplotlib.figure import Figure
 from db import get_db_connection
 
 
+class DragScrollArea(QScrollArea):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMouseTracking(True)
+        self._drag_active = False
+        self._start_pos = None
+        self._start_scroll = None
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._drag_active = True
+            self._start_pos = event.pos()
+            self._start_scroll = self.verticalScrollBar().value(), self.horizontalScrollBar().value()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_active and self._start_pos:
+            delta = event.pos() - self._start_pos
+
+            vbar = self.verticalScrollBar()
+            hbar = self.horizontalScrollBar()
+
+            vbar.setValue(self._start_scroll[0] - delta.y())
+            hbar.setValue(self._start_scroll[1] - delta.x())
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_active = False
+        self._start_pos = None
+        super().mouseReleaseEvent(event)
+
 def drop_shadow(widget, blur=25, x=3, y=3, alpha=150):
     fx = QGraphicsDropShadowEffect()
     fx.setBlurRadius(blur)
@@ -148,7 +180,7 @@ class ReportPage(QWidget):
         root.addWidget(sep)
 
         # ── CONTENT SCROLL ───────────────────────────────────────────────────
-        scroll_area = QScrollArea()
+        scroll_area = DragScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.NoFrame)
         scroll_area.setStyleSheet("""
