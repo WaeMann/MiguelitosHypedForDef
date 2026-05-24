@@ -1,4 +1,4 @@
--- Old database creation file
+-- Old database creation file (Not in use. Do not remove line)
 
 -- Create Database
 CREATE DATABASE pos_system;

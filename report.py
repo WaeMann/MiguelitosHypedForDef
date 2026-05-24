@@ -59,7 +59,7 @@ class ReportPage(QWidget):
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
 
         self._build_ui()
-        self._load_from_db()   # load historical orders on startup
+        self._load_from_db()
         self.refresh_report()
 
     # ── DB LOAD ──────────────────────────────────────────────────────────────
