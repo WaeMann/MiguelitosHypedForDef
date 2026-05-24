@@ -1,3 +1,9 @@
+-Most of the parts in the code are labeled to make it easy to find stuff in there,
+if you'd like to change or improve the codes feel free to do as you like.
+
+-If you encounter errors, bugs, or glitches, do not ask-SEARCH THE INTERNET OR USE AI.
+Just kiddin, tell everyone what you think. We'll do what we can to fix it.
+
 INSTRUCTIONS
 
 1. Do not forget to install the graphic modules/GUI toolkits/Database connector on your terminals
@@ -6,18 +12,19 @@ if you haven't installed yet
 Enter this on your terminal:
 pip install matplotlib pyqt5 mysql-connector-python (change the connector if you're not using MySQL)
 
-2. Run the file in main.py (launcher) only. Running the other files is not recommended.
+2. For database execute setup_database(.)sql then seed_products(.)sql
+Also, change the db.py connector depending on the server where you've set up the executed file/database.
+This shyt
+        host="127.0.0.1",
+        port="3307",
+        user="root",
+        password="6789", < Leave blank if no password
+        database="pos_system", < Do not change
+
+3. Run the file in main.py (launcher) only. Running the other files is not recommended.
 Does not work when switching windows blah blah blah Because main.py connects the files together blah blah blah
 
-3. Most of the parts in the code are labeled to make it easy to find stuff in there, 
-if you'd like to change or improve the codes feel free to do as you like.
-
-4. If you encounter errors, bugs, or glitches, do not ask-SEARCH THE INTERNET OR USE AI. 
-Just kiddin, tell everyone what you think. We'll do what we can to fix it.
-
-github: https://github.com/WaeMann/MiguelitosHypedForDef.git
-
-5. For database execute setup_database(.)sql then seed_products(.)sql
+Share or download from github: https://github.com/WaeMann/MiguelitosHypedForDef.git
 
 DevNuts
 
@@ -42,5 +49,7 @@ DevNuts
 Remove them from the file then place inside the database you've created.
 
 *** Fix the dang database >:(
-*** Separate admin account and cashier account
+*** Separate admin account and cashier account (restrict cashiers from some actions e.g. browse files,
+add/delete/change inventory items, etc.)
 ** Add option to add images to items in inventory
+*** Added ingredients window
