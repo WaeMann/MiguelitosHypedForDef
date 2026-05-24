@@ -134,7 +134,7 @@ class IngredientsPage(QWidget):
 
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
         self.initUI()
-        self.load_from_db()   # ← was wrongly named _load_defaults() before
+        self.load_from_db()
 
     def initUI(self):
         root = QVBoxLayout(self)

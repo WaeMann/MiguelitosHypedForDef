@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QFrame, QHeaderView, QMessageBox,
     QGraphicsDropShadowEffect, QSizePolicy
 )
+from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QIcon, QIntValidator, QColor
 
@@ -281,9 +282,13 @@ class InventoryPage(QWidget):
         self.quantity.setValidator(QIntValidator(0, 999999))
         self.quantity.setStyleSheet(INPUT_STYLE)
 
-        self.expiry = QLineEdit()
-        self.expiry.setPlaceholderText("e.g. 12oz, 16oz")
+        self.expiry = QComboBox()
         self.expiry.setStyleSheet(INPUT_STYLE)
+
+        self.expiry.addItems([
+            "12oz",
+            "16oz",
+        ])
 
         self.type = QLineEdit()
         self.type.setPlaceholderText("e.g. Desserts")
@@ -450,7 +455,7 @@ class InventoryPage(QWidget):
         self.table.setRowHeight(row, 40)
         for col, val in enumerate([
             "", self.name.text(), self.quantity.text(),
-            self.expiry.text(), self.type.text()
+            self.expiry.currentText(), self.type.text()
         ]):
             self.table.setItem(row, col, self._make_cell(val))
         self._row_ids[row] = new_id
@@ -461,7 +466,10 @@ class InventoryPage(QWidget):
         self.selected_row = row
         self.name.setText(self.table.item(row, 1).text())
         self.quantity.setText(self.table.item(row, 2).text())
-        self.expiry.setText(self.table.item(row, 3).text())
+        size = self.table.item(row, 3).text()
+        index = self.expiry.findText(size)
+        if index >= 0:
+            self.expiry.setCurrentIndex(index)
         self.type.setText(self.table.item(row, 4).text())
 
     def update_item(self):
@@ -478,7 +486,7 @@ class InventoryPage(QWidget):
             )
         for col, val in enumerate([
             "", self.name.text(), self.quantity.text(),
-            self.expiry.text(), self.type.text()
+            self.expiry.currentText(), self.type.text()
         ]):
             self.table.setItem(self.selected_row, col, self._make_cell(val))
         self.update_numbers()
@@ -509,7 +517,7 @@ class InventoryPage(QWidget):
     def clear_inputs(self):
         self.name.clear()
         self.quantity.clear()
-        self.expiry.clear()
+        self.expiry.setCurrentIndex(0)
         self.type.clear()
 
     def reduce_stock(self, sold_items):
