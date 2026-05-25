@@ -6,13 +6,16 @@ Just kiddin, tell everyone what you think. We'll do what we can to fix it.
 
 INSTRUCTIONS
 
-1. Do not forget to install the graphic modules/GUI toolkits/Database connector on your terminals
+1. Do not forget to create/add local python interpreter on your IDE.
+settings > python > interpreter > add/create local interpreter
+
+2. Do not forget to install the graphic modules/GUI toolkits/Database connector on your terminals
 if you haven't installed yet
 
 Enter this on your terminal:
 pip install matplotlib pyqt5 mysql-connector-python (change the connector if you're not using MySQL)
 
-2. For database execute setup_database(.)sql then seed_products(.)sql
+3. For database execute setup_database(.)sql then seed_products(.)sql
 Also, change the db.py connector depending on the server where you've set up the executed file/database.
 This shyt
         host="127.0.0.1",
@@ -21,7 +24,7 @@ This shyt
         password="6789", < Leave blank if no password
         database="pos_system", < Do not change
 
-3. Run the file in main.py (launcher) only. Running the other files is not recommended.
+4. Run the file in main.py (launcher) only. Running the other files is not recommended.
 Does not work when switching windows blah blah blah Because main.py connects the files together blah blah blah
 
 Share or download from github: https://github.com/WaeMann/MiguelitosHypedForDef.git
