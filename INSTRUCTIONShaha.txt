@@ -47,12 +47,13 @@ DevNuts
 * Remove/keep Login button in inventory window
 * Add ingredients in inventory.
 * Add confirmation after clicking "COMPLETE ORDER".
-
 ** FOR THE DATABASE- I've created constant/sample items inside script.py.
 Remove them from the file then place inside the database you've created.
-
 *** Fix the dang database >:(
 *** Separate admin account and cashier account (restrict cashiers from some actions e.g. browse files,
 add/delete/change inventory items, etc.)
 ** Add option to add images to items in inventory
 *** Added ingredients window
+*** Fix logout. Should go back to login instead of closing itself
+*** Add new window. Ingredients manager
+*** Add automatic change calculator
