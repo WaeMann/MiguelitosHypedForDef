@@ -18,9 +18,9 @@ def get_db_connection():
     if not DB_AVAILABLE:
         raise RuntimeError("mysql-connector-python is not installed. Run: pip install mysql-connector-python")
     return mysql.connector.connect(
-        host="127.0.0.1",
-        port="3307",
+        host="localhost",
+        port="3306",
         user="root",
-        password="6789",
+        password="",
         database="pos_system",
     )

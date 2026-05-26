@@ -57,3 +57,5 @@ add/delete/change inventory items, etc.)
 *** Fix logout. Should go back to login instead of closing itself
 *** Add new window. Ingredients manager
 *** Add automatic change calculator
+*** Add daily reset
+*** Add ice to ingredients

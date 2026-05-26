@@ -7,8 +7,6 @@ from PyQt5.QtWidgets import (
     QLabel, QLineEdit, QFrame, QHeaderView, QMessageBox,
     QGraphicsDropShadowEffect, QSizePolicy, QFileDialog
 )
-from PyQt5.QtGui import QPixmap, QIcon, QIntValidator, QColor, QMouseEvent
-from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QIcon, QIntValidator, QColor
 
@@ -123,50 +121,7 @@ QScrollBar::handle:vertical {
     border-radius: 4px;
 }
 """
-class DragScrollTable(QTableWidget):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
-        self.setHorizontalScrollMode(QTableWidget.ScrollPerPixel)
-        self.setVerticalScrollMode(QTableWidget.ScrollPerPixel)
-
-        self._drag_active = False
-        self._start_pos = None
-
-        # keep normal scrollbars
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self._drag_active = True
-            self._start_pos = event.pos()
-            self.setCursor(Qt.ClosedHandCursor)
-
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        if self._drag_active and self._start_pos:
-            delta = event.pos() - self._start_pos
-
-            self.horizontalScrollBar().setValue(
-                self.horizontalScrollBar().value() - delta.x()
-            )
-
-            self.verticalScrollBar().setValue(
-                self.verticalScrollBar().value() - delta.y()
-            )
-
-            self._start_pos = event.pos()
-
-        super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        self._drag_active = False
-        self._start_pos = None
-        self.setCursor(Qt.ArrowCursor)
-
-        super().mouseReleaseEvent(event)
 
 class InventoryPage(QWidget):
     def __init__(self, switch_callback=None):
@@ -175,11 +130,12 @@ class InventoryPage(QWidget):
         self.setWindowTitle("Hyped Mangoes — Inventory")
         self.showMaximized()
         self.selected_row = None
+        # Maps table row index → product DB id
         self._row_ids = {}
 
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
         self.initUI()
-        self.load_from_db()
+        #self.load_from_db()
 
     def initUI(self):
         root = QVBoxLayout(self)
@@ -266,9 +222,10 @@ class InventoryPage(QWidget):
         )
         table_panel_layout.addWidget(panel_title)
 
-        # 6 columns now — added Image Path
-        self.table = DragScrollTable(0, 6)
-        self.table.setHorizontalHeaderLabels(["#", "Product Name", "Qty Left", "Available Sizes", "Category", "Image Path"])
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(
+            ["#", "Product Name", "Qty Left", "Available Sizes", "Category", "Image Path"]
+        )
         self.table.setStyleSheet(TABLE_STYLE)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -280,8 +237,7 @@ class InventoryPage(QWidget):
 
         header = self.table.horizontalHeader()
         header.setStretchLastSection(True)
-        header.setSectionResizeMode(QHeaderView.ResizeToContents)
-        #header.setSectionResizeMode(QHeaderView.Interactive)
+        header.setSectionResizeMode(QHeaderView.Stretch)
         header.setDefaultAlignment(Qt.AlignCenter)
         self.table.setRowHeight(0, 40)
 
@@ -291,7 +247,7 @@ class InventoryPage(QWidget):
         # FORM PANEL
         form_panel = QFrame()
         form_panel.setStyleSheet("QFrame { background-color: #E8D28C; border-radius: 16px; }")
-        form_panel.setFixedWidth(300)
+        form_panel.setFixedWidth(280)
         drop_shadow(form_panel, blur=30, alpha=140)
         form_panel_layout = QVBoxLayout(form_panel)
         form_panel_layout.setContentsMargins(20, 20, 20, 20)
@@ -327,9 +283,9 @@ class InventoryPage(QWidget):
         self.quantity.setValidator(QIntValidator(0, 999999))
         self.quantity.setStyleSheet(INPUT_STYLE)
 
-        self.expiry = QComboBox()
+        self.expiry = QLineEdit()
+        self.expiry.setPlaceholderText("e.g. 12oz, 16oz")
         self.expiry.setStyleSheet(INPUT_STYLE)
-        self.expiry.addItems(["12oz", "16oz"])
 
         self.type = QLineEdit()
         self.type.setPlaceholderText("e.g. Desserts")
@@ -347,6 +303,16 @@ class InventoryPage(QWidget):
         browse_btn.clicked.connect(self._browse_image)
         drop_shadow(browse_btn, blur=8, alpha=60)
 
+        # Image preview box
+        self.img_preview = QLabel()
+        self.img_preview.setFixedSize(120, 90)
+        self.img_preview.setAlignment(Qt.AlignCenter)
+        self.img_preview.setStyleSheet(
+            "background-color: white; border-radius: 8px; "
+            "border: 1px solid #d6d2c4; color: #aaa; font-size: 11px;"
+        )
+        self.img_preview.setText("No Image")
+
         form_panel_layout.addWidget(field_label("Product Name"))
         form_panel_layout.addWidget(self.name)
         form_panel_layout.addWidget(field_label("Quantity Left"))
@@ -355,11 +321,18 @@ class InventoryPage(QWidget):
         form_panel_layout.addWidget(self.expiry)
         form_panel_layout.addWidget(field_label("Category"))
         form_panel_layout.addWidget(self.type)
+
         form_panel_layout.addWidget(field_label("Image Path / URL"))
         form_panel_layout.addWidget(self.image_path)
         form_panel_layout.addWidget(browse_btn)
 
-        form_panel_layout.addSpacing(6)
+        preview_row = QHBoxLayout()
+        preview_row.addStretch()
+        preview_row.addWidget(self.img_preview)
+        preview_row.addStretch()
+        form_panel_layout.addLayout(preview_row)
+
+        form_panel_layout.addSpacing(10)
 
         add_btn = QPushButton("＋  ADD ITEM")
         add_btn.setStyleSheet(GREEN_BTN_STYLE)
@@ -387,12 +360,14 @@ class InventoryPage(QWidget):
         content_layout.addWidget(form_panel)
 
     # ── IMAGE HELPERS ─────────────────────────────────────────────────────────
-
     def _browse_image(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Select Product Image", "",
+            self,
+            "Select Product Image",
+            "",
             "Images (*.png *.jpg *.jpeg *.webp *.bmp *.gif)"
         )
+
         if path:
             self.image_path.setText(path)
 
@@ -401,19 +376,25 @@ class InventoryPage(QWidget):
             self.img_preview.setPixmap(QPixmap())
             self.img_preview.setText("No Image")
             return
+
         px = QPixmap(path.strip())
+
         if not px.isNull():
             self.img_preview.setText("")
             self.img_preview.setPixmap(
-                px.scaled(self.img_preview.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                px.scaled(
+                    self.img_preview.size(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
             )
         else:
             self.img_preview.setPixmap(QPixmap())
             self.img_preview.setText("Not found")
 
     # ── DB FUNCTIONS ──────────────────────────────────────────────────────────
-
     def load_from_db(self):
+        """Load all products from DB into the table."""
         self.table.setRowCount(0)
         self._row_ids = {}
         try:
@@ -449,9 +430,11 @@ class InventoryPage(QWidget):
             QMessageBox.critical(self, "DB Error", f"Could not load products:\n{err}")
 
     def _save_add_to_db(self, product_name, stock, category_name, image_path):
+        """Insert a new product into DB. Returns new product id or None."""
         try:
             db = get_db_connection()
             cur = db.cursor()
+            # Get or create category
             cur.execute("SELECT id FROM categories WHERE category_name = %s", (category_name,))
             cat = cur.fetchone()
             if cat:
@@ -502,7 +485,7 @@ class InventoryPage(QWidget):
         except Exception as err:
             QMessageBox.critical(self, "DB Error", f"Could not delete product:\n{err}")
 
-    # ── TABLE HELPERS ─────────────────────────────────────────────────────────
+    # ── TABLE FUNCTIONS ───────────────────────────────────────────────────────
 
     def _make_cell(self, text, align=Qt.AlignCenter):
         item = QTableWidgetItem(text)
@@ -517,8 +500,6 @@ class InventoryPage(QWidget):
                 new_ids[row] = self._row_ids[row]
         self._row_ids = new_ids
 
-    # ── CRUD ──────────────────────────────────────────────────────────────────
-
     def add_item(self):
         if not self.name.text() or not self.quantity.text():
             QMessageBox.warning(self, "Missing Fields", "Please fill in Product Name and Quantity.")
@@ -528,7 +509,7 @@ class InventoryPage(QWidget):
             self.name.text(),
             self.quantity.text(),
             self.type.text() or "Other",
-            self.image_path.text().strip(),
+            self.image_path.text().strip()
         )
         if new_id is None:
             return
@@ -538,8 +519,8 @@ class InventoryPage(QWidget):
         self.table.setRowHeight(row, 40)
         for col, val in enumerate([
             "", self.name.text(), self.quantity.text(),
-            self.expiry.currentText(), self.type.text(),
-            self.image_path.text().strip(),
+            self.expiry.text(), self.type.text(),
+            self.image_path.text().strip()
         ]):
             self.table.setItem(row, col, self._make_cell(val))
         self._row_ids[row] = new_id
@@ -550,10 +531,7 @@ class InventoryPage(QWidget):
         self.selected_row = row
         self.name.setText(self.table.item(row, 1).text())
         self.quantity.setText(self.table.item(row, 2).text())
-        size = self.table.item(row, 3).text()
-        index = self.expiry.findText(size)
-        if index >= 0:
-            self.expiry.setCurrentIndex(index)
+        self.expiry.setText(self.table.item(row, 3).text())
         self.type.setText(self.table.item(row, 4).text())
         img = self.table.item(row, 5)
         self.image_path.setText(img.text() if img else "")
@@ -569,12 +547,12 @@ class InventoryPage(QWidget):
                 self.name.text(),
                 self.quantity.text(),
                 self.type.text() or "Other",
-                self.image_path.text().strip(),
+                self.image_path.text().strip()
             )
         for col, val in enumerate([
             "", self.name.text(), self.quantity.text(),
-            self.expiry.currentText(), self.type.text(),
-            self.image_path.text().strip(),
+            self.expiry.text(), self.type.text(),
+            self.image_path.text().strip()
         ]):
             self.table.setItem(self.selected_row, col, self._make_cell(val))
         self.update_numbers()
@@ -605,7 +583,7 @@ class InventoryPage(QWidget):
     def clear_inputs(self):
         self.name.clear()
         self.quantity.clear()
-        self.expiry.setCurrentIndex(0)
+        self.expiry.clear()
         self.type.clear()
         self.image_path.clear()
 
@@ -623,6 +601,8 @@ class InventoryPage(QWidget):
             db.close()
         except Exception as err:
             print(f"[DB] reduce_stock error: {err}")
+
+        # Also refresh table from DB
         self.load_from_db()
 
 
