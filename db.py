@@ -21,6 +21,6 @@ def get_db_connection():
         host="localhost",
         port="3306",
         user="root",
-        password="",
+        password="6789",
         database="pos_system",
     )
