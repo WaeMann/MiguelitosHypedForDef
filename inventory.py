@@ -135,7 +135,7 @@ class InventoryPage(QWidget):
 
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
         self.initUI()
-        #self.load_from_db()
+        self.load_from_db()
 
     def initUI(self):
         root = QVBoxLayout(self)
