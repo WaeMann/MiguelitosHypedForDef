@@ -13,7 +13,7 @@ settings > python > interpreter > add/create local interpreter
 if you haven't installed yet
 
 Enter this on your terminal:
-pip install matplotlib pyqt5 mysql-connector-python (change the connector if you're not using MySQL)
+pip install pyqt5 matplotlib mysql-connector-python (change the connector if you're not using MySQL)
 
 3. For database execute setup_database(.)sql then seed_products(.)sql
 Also, change the db.py connector depending on the server where you've set up the executed file/database.

@@ -1,4 +1,4 @@
--- seed_products.sql
+-- This is seed_products.sql (Do not remove line)
 
 USE pos_system;
 
@@ -34,3 +34,9 @@ INSERT INTO ingredients(ingredient_name, stock_left, unit, category) VALUES
 ('Mango Juice 1kg Gallon',   7,   'pcs',   'Juice'),
 ('All Purpose Cream',        10,  'pcs',   'Cream'),
 ('Condensada',               5,   'pcs',   'Milk');
+
+-- Sizes
+INSERT INTO product_sizes(product_id, size_id) VALUES
+(1,1),(1,2),
+(2,1),(2,2),
+(3,1),(3,2);
