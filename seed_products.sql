@@ -40,6 +40,3 @@ INSERT INTO product_sizes(product_id, size_id) VALUES
 (1,1),(1,2),
 (2,1),(2,2),
 (3,1),(3,2);
-
--- ALTER TABLE
-ALTER TABLE products ADD COLUMN is_active TINYINT DEFAULT 1;
