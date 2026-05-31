@@ -781,8 +781,8 @@ class IMS(QWidget):
             self.report_page.update_sales(report_items, self.order_total)
 
         # ── Refresh inventory + ingredients pages so numbers update live ──────
-        if self.refresh_callback:
-            self.refresh_callback()
+        if self.inventory_page:
+            self.inventory_page.load_from_db()
 
         # ── Clear order list ──────────────────────────────────────────────────
         for i in reversed(range(self.order_layout.count())):
