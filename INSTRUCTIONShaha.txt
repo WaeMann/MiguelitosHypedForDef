@@ -31,6 +31,8 @@ This shyt
 4. Run the file in main.py (launcher) only. Running the other files is not recommended.
 Does not work when switching windows blah blah blah Because main.py connects the files together blah blah blah
 
+5. Use 'TestChisa.jpg' (Remove "C:/Users/Administrator/PycharmProjects/MiguelitosHypedForDef/") in folder for showcasing image function/database.
+
 DevNuts
 
 *Pending
