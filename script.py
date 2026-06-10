@@ -4,10 +4,10 @@ import sys
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QFrame, QGraphicsDropShadowEffect,
     QPushButton, QScrollArea, QGridLayout, QVBoxLayout, QHBoxLayout,
-    QComboBox, QSizePolicy, QMessageBox,
+    QComboBox, QSizePolicy, QMessageBox, QDialog, QLineEdit,
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QPixmap
+from PyQt5.QtGui import QColor, QPixmap, QIntValidator, QFont
 
 from db import get_db_connection
 
@@ -15,6 +15,9 @@ try:
     from report import ReportPage
 except ImportError:
     ReportPage = None
+
+# Exit code that main.py watches for — triggers "go back to login"
+LOGOUT_CODE = 42
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +117,254 @@ class DragScrollArea(QScrollArea):
 
 
 # ---------------------------------------------------------------------------
+# Payment dialog  (cash tendered + change calculator + receipt summary)
+# ---------------------------------------------------------------------------
+class PaymentDialog(QDialog):
+    """Shows order summary, accepts cash, calculates change."""
+
+    FIELD_STYLE = """
+    QLineEdit {
+        border: 2px solid #ccc;
+        border-radius: 10px;
+        padding: 8px 14px;
+        font-size: 22px;
+        font-weight: bold;
+        background: white;
+        color: #2b2b2b;
+    }
+    QLineEdit:focus { border: 2px solid #FFD700; }
+    """
+
+    def __init__(self, order_rows, total, parent=None):
+        super().__init__(parent)
+        self.order_rows = order_rows
+        self.order_total = total
+        self.payment_confirmed = False
+
+        self.setWindowTitle("Payment")
+        self.setFixedSize(440, 560)
+        self.setStyleSheet("""
+            QDialog { background-color: #FFF8E7; }
+            QLabel  { color: #333; }
+        """)
+        self._build()
+        self._center()
+
+    # ── build UI ─────────────────────────────────────────────────────────────
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Header
+        header = QFrame()
+        header.setFixedHeight(56)
+        header.setStyleSheet("background-color: #E8D28C; border-radius: 0px;")
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(20, 0, 20, 0)
+        htitle = QLabel("💳  Complete Payment")
+        htitle.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        htitle.setStyleSheet("color: #2b2b2b; background: transparent;")
+        hl.addWidget(htitle)
+        root.addWidget(header)
+
+        body = QWidget()
+        body.setStyleSheet("background: transparent;")
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(24, 16, 24, 16)
+        bl.setSpacing(10)
+        root.addWidget(body, stretch=1)
+
+        # ── Order summary ─────────────────────────────────────────────────────
+        summary_frame = QFrame()
+        summary_frame.setStyleSheet("""
+            QFrame { background-color: white; border-radius: 10px;
+                     border: 1px solid #ede9dc; }
+        """)
+        sf_layout = QVBoxLayout(summary_frame)
+        sf_layout.setContentsMargins(12, 10, 12, 10)
+        sf_layout.setSpacing(4)
+
+        sh = QLabel("ORDER SUMMARY")
+        sh.setStyleSheet(
+            "font-size: 10px; font-weight: bold; color: #aaa; "
+            "letter-spacing: 2px; background: transparent;"
+        )
+        sf_layout.addWidget(sh)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setMaximumHeight(140)
+        scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        sc = QWidget()
+        sc.setStyleSheet("background: transparent;")
+        scl = QVBoxLayout(sc)
+        scl.setContentsMargins(0, 0, 0, 0)
+        scl.setSpacing(2)
+
+        for row in self.order_rows:
+            item_lbl = QLabel(
+                f"  {row['name']}  ×{row['qty']}  ({row['size']})  "
+                f"<b>₱{row['price']:,}</b>"
+            )
+            item_lbl.setTextFormat(Qt.RichText)
+            item_lbl.setStyleSheet("font-size: 13px; color: #2c3e50; background: transparent;")
+            scl.addWidget(item_lbl)
+
+        scl.addStretch()
+        scroll.setWidget(sc)
+        sf_layout.addWidget(scroll)
+
+        sep = QFrame()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet("background: #ede9dc; border: none;")
+        sf_layout.addWidget(sep)
+
+        total_row = QHBoxLayout()
+        total_lbl = QLabel("TOTAL")
+        total_lbl.setStyleSheet(
+            "font-size: 12px; font-weight: bold; color: #555; background: transparent;"
+        )
+        self._total_val = QLabel(f"₱{self.order_total:,}")
+        self._total_val.setStyleSheet(
+            "font-size: 18px; font-weight: bold; color: #2b2b2b; background: transparent;"
+        )
+        self._total_val.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        total_row.addWidget(total_lbl)
+        total_row.addWidget(self._total_val)
+        sf_layout.addLayout(total_row)
+        bl.addWidget(summary_frame)
+
+        # ── Cash tendered ─────────────────────────────────────────────────────
+        cash_lbl = QLabel("CASH TENDERED")
+        cash_lbl.setStyleSheet(
+            "font-size: 11px; font-weight: bold; color: #888; letter-spacing: 1px;"
+        )
+        bl.addWidget(cash_lbl)
+
+        self.cash_input = QLineEdit()
+        self.cash_input.setPlaceholderText("Enter amount…")
+        self.cash_input.setValidator(QIntValidator(0, 9_999_999, self))
+        self.cash_input.setStyleSheet(self.FIELD_STYLE)
+        self.cash_input.setFixedHeight(52)
+        self.cash_input.textChanged.connect(self._update_change)
+        bl.addWidget(self.cash_input)
+
+        # ── Change display ────────────────────────────────────────────────────
+        change_frame = QFrame()
+        change_frame.setStyleSheet("""
+            QFrame { background-color: #f0faf4; border-radius: 10px;
+                     border: 1px solid #b2dfcc; }
+        """)
+        change_frame.setFixedHeight(64)
+        cf_layout = QHBoxLayout(change_frame)
+        cf_layout.setContentsMargins(16, 0, 16, 0)
+
+        change_title = QLabel("CHANGE")
+        change_title.setStyleSheet(
+            "font-size: 11px; font-weight: bold; color: #777; "
+            "letter-spacing: 1px; background: transparent;"
+        )
+        change_title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+        self.change_val = QLabel("₱—")
+        self.change_val.setFont(QFont("Segoe UI", 20, QFont.Bold))
+        self.change_val.setStyleSheet("color: #1e7f3f; background: transparent;")
+        self.change_val.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        cf_layout.addWidget(change_title)
+        cf_layout.addWidget(self.change_val)
+        bl.addWidget(change_frame)
+
+        bl.addStretch()
+
+        # ── Confirm button ────────────────────────────────────────────────────
+        self.confirm_btn = QPushButton("✔  CONFIRM PAYMENT")
+        self.confirm_btn.setFixedHeight(50)
+        self.confirm_btn.setFont(QFont("Segoe UI", 13, QFont.Bold))
+        self.confirm_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1e7f3f; color: white;
+                border: none; border-radius: 12px;
+                font-weight: bold; font-size: 14px;
+            }
+            QPushButton:hover   { background-color: #166330; }
+            QPushButton:pressed { background-color: #0e4a22; }
+            QPushButton:disabled {
+                background-color: #ccc; color: #888;
+            }
+        """)
+        self.confirm_btn.setEnabled(False)
+        self.confirm_btn.clicked.connect(self._confirm)
+        bl.addWidget(self.confirm_btn)
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setFixedHeight(36)
+        cancel_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; color: #888;
+                border: 1px solid #ccc; border-radius: 10px;
+                font-size: 13px;
+            }
+            QPushButton:hover { background: #f5f5f5; }
+        """)
+        cancel_btn.clicked.connect(self.reject)
+        bl.addWidget(cancel_btn)
+
+    # ── slots ─────────────────────────────────────────────────────────────────
+
+    def _update_change(self):
+        try:
+            cash = int(self.cash_input.text() or 0)
+        except ValueError:
+            cash = 0
+
+        change = cash - self.order_total
+        if cash == 0:
+            self.change_val.setText("₱—")
+            self.change_val.setStyleSheet("color: #1e7f3f; background: transparent;")
+            self.confirm_btn.setEnabled(False)
+        elif change >= 0:
+            self.change_val.setText(f"₱{change:,}")
+            self.change_val.setStyleSheet("color: #1e7f3f; background: transparent;")
+            # Also update parent frame color
+            self.change_val.parent().setStyleSheet("""
+                QFrame { background-color: #f0faf4; border-radius: 10px;
+                         border: 1px solid #b2dfcc; }
+            """)
+            self.confirm_btn.setEnabled(True)
+        else:
+            self.change_val.setText(f"–₱{abs(change):,}")
+            self.change_val.setStyleSheet("color: #c0392b; background: transparent;")
+            self.change_val.parent().setStyleSheet("""
+                QFrame { background-color: #fdf0f0; border-radius: 10px;
+                         border: 1px solid #e8b4b4; }
+            """)
+            self.confirm_btn.setEnabled(False)
+
+    def _confirm(self):
+        try:
+            cash = int(self.cash_input.text() or 0)
+        except ValueError:
+            cash = 0
+        if cash < self.order_total:
+            QMessageBox.warning(self, "Insufficient Cash",
+                                "Cash tendered must be ≥ the order total.")
+            return
+        self.payment_confirmed = True
+        self.accept()
+
+    def _center(self):
+        if self.parent():
+            pg = self.parent().window().geometry()
+            self.move(
+                pg.x() + (pg.width()  - self.width())  // 2,
+                pg.y() + (pg.height() - self.height()) // 2,
+            )
+
+
+# ---------------------------------------------------------------------------
 # DB helpers
 # ---------------------------------------------------------------------------
 def load_products_from_db():
@@ -133,7 +384,6 @@ def load_products_from_db():
         db = get_db_connection()
         cur = db.cursor(dictionary=True)
 
-        # Products with category names
         cur.execute("""
             SELECT p.id, p.product_name, p.base_price, p.image_path, p.stock,
                    c.category_name
@@ -147,7 +397,6 @@ def load_products_from_db():
             categories[cat].append(row)
             product_map[row["product_name"]] = row
 
-        # Sizes
         cur.execute("SELECT size_name, multiplier FROM sizes ORDER BY multiplier")
         for row in cur.fetchall():
             sizes.append(row["size_name"])
@@ -157,7 +406,6 @@ def load_products_from_db():
     except Exception as err:
         print(f"[DB] Could not load products: {err}")
 
-    # Fallback so the UI doesn't crash when DB is empty
     if not sizes:
         sizes = ["12oz", "16oz"]
         size_mult = {"12oz": 1.0, "16oz": 1.3}
@@ -171,11 +419,9 @@ def save_order_to_db(order_rows, total):
         db = get_db_connection()
         cur = db.cursor()
 
-        # ── 1. Insert order header ────────────────────────────────────────────
         cur.execute("INSERT INTO orders (total) VALUES (%s)", (total,))
         order_id = cur.lastrowid
 
-        # ── 2. Insert order items ─────────────────────────────────────────────
         for row_data in order_rows:
             cur.execute("""
                 INSERT INTO order_items
@@ -190,7 +436,6 @@ def save_order_to_db(order_rows, total):
                 row_data["price"],
             ))
 
-        # ── 3. Reduce product stock ───────────────────────────────────────────
         for row_data in order_rows:
             if row_data.get("product_id"):
                 cur.execute("""
@@ -199,8 +444,6 @@ def save_order_to_db(order_rows, total):
                     WHERE id = %s
                 """, (row_data["qty"], row_data["product_id"]))
 
-        # ── 4. Reduce linked ingredient stock ─────────────────────────────────
-        # cursor returns tuples: (ingredient_id, amount_used)
         for row_data in order_rows:
             if row_data.get("product_id"):
                 cur.execute("""
@@ -227,11 +470,13 @@ def save_order_to_db(order_rows, total):
 # Main window
 # ---------------------------------------------------------------------------
 class IMS(QWidget):
-    def __init__(self, switch_callback=None, report_page=None, inventory_page=None):
+    def __init__(self, switch_callback=None, report_page=None,
+                 inventory_page=None, role="cashier"):
         super().__init__()
         self.switch_callback = switch_callback
         self.report_page = report_page
         self.inventory_page = inventory_page
+        self.role = role
 
         self.section_grids = []
         self.menu_cards = []
@@ -241,8 +486,8 @@ class IMS(QWidget):
         self.order_total = 0
         self.selected_order_row = None
 
-        # Load from DB
-        self.db_categories, self.product_map, self.sizes, self.size_mult = load_products_from_db()
+        self.db_categories, self.product_map, self.sizes, self.size_mult = \
+            load_products_from_db()
 
         self.setWindowTitle("Inventory Management System")
         self.setMinimumSize(900, 600)
@@ -417,11 +662,19 @@ class IMS(QWidget):
 
         main_area_layout.addWidget(top_bar)
 
+        # ── Wire nav buttons ──────────────────────────────────────────────────
         if self.switch_callback:
-            self.report_top_btn.clicked.connect(lambda: self.switch_callback("report"))
-            self.inventory_top_btn.clicked.connect(lambda: self.switch_callback("inventory"))
+            self.report_top_btn.clicked.connect(
+                lambda: self.switch_callback("report"))
+            self.inventory_top_btn.clicked.connect(
+                lambda: self.switch_callback("inventory"))
 
         self.admin_btn.clicked.connect(self.admin_clicked)
+
+        # Cashiers don't need inventory / report access from POS screen
+        if self.role != "admin":
+            self.inventory_top_btn.hide()
+            self.report_top_btn.hide()
 
         # MENU SCROLL AREA
         self.scroll_area = DragScrollArea()
@@ -516,7 +769,7 @@ class IMS(QWidget):
         self.installEventFilter(self)
 
     # -------------------------------------------------------------------------
-    # Section builder — now receives list of product dicts from DB
+    # Section builder
     # -------------------------------------------------------------------------
     def _create_section(self, title, products):
         section = QWidget()
@@ -618,6 +871,48 @@ class IMS(QWidget):
             label.setText("No Image")
 
     # -------------------------------------------------------------------------
+    # Refresh menu cards from DB (called after each completed order)
+    # -------------------------------------------------------------------------
+    def refresh_products(self):
+        """Reload products from DB and rebuild the menu card grid."""
+        self.db_categories, self.product_map, self.sizes, self.size_mult = \
+            load_products_from_db()
+        self.section_grids = []
+        self.menu_cards = []
+
+        # Update size combo boxes with latest sizes
+        self.combo2.blockSignals(True)
+        self.combo2.clear()
+        self.combo2.addItems(self.sizes)
+        self.combo2.blockSignals(False)
+        self.bottom_combo2.clear()
+        self.bottom_combo2.addItems(self.sizes)
+
+        # Replace scroll content widget
+        new_content = QWidget()
+        new_content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        menu_layout = QVBoxLayout(new_content)
+        menu_layout.setContentsMargins(20, 20, 20, 20)
+        menu_layout.setSpacing(30)
+        menu_layout.setAlignment(Qt.AlignTop)
+
+        if self.db_categories:
+            for category_name, products in self.db_categories.items():
+                menu_layout.addWidget(self._create_section(category_name, products))
+        else:
+            lbl = QLabel("No products found in database.\nPlease run seed_products.sql first.")
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet("font-size: 16px; color: #666;")
+            menu_layout.addWidget(lbl)
+
+        old = self.scroll_area.takeWidget()
+        self.scroll_content = new_content
+        self.scroll_area.setWidget(new_content)
+        if old:
+            old.deleteLater()
+
+    # -------------------------------------------------------------------------
     # Slots
     # -------------------------------------------------------------------------
     def item_clicked(self, name):
@@ -643,28 +938,6 @@ class IMS(QWidget):
             return
         product = self.product_map.get(self.selected_item, {})
         product_id = product.get("id")
-
-        # ── Check that at least one ingredient is linked ──────────────────────
-        if product_id:
-            try:
-                db = get_db_connection()
-                cur = db.cursor()
-                cur.execute(
-                    "SELECT COUNT(*) FROM product_ingredients WHERE product_id = %s",
-                    (product_id,)
-                )
-                count = cur.fetchone()[0]
-                db.close()
-                if count == 0:
-                    QMessageBox.warning(
-                        self,
-                        "No Ingredients Linked",
-                        f"'{self.selected_item}' has no ingredients linked.\n"
-                        "Please link ingredients via Inventory → Manage first."
-                    )
-                    return
-            except Exception as err:
-                print(f"[DB] ingredient check error: {err}")
 
         qty = int(self.combo1.currentText())
         size = self.combo2.currentText()
@@ -758,29 +1031,33 @@ class IMS(QWidget):
 
     def complete_order(self):
         if self.order_total == 0:
-            QMessageBox.warning(self, "Empty Order", "Please add items before completing an order.")
+            QMessageBox.warning(self, "Empty Order",
+                                "Please add items before completing an order.")
             return
 
-        QMessageBox.information(self, "Order Complete", f"Total Price: ₱{self.order_total}")
-
-        # Collect order rows
+        # Collect rows first (needed for payment dialog summary)
         order_rows = []
         report_items = []
-
         for i in range(self.order_layout.count()):
             w = self.order_layout.itemAt(i).widget()
             if w and hasattr(w, "data"):
                 order_rows.append(w.data)
                 report_items.append((w.data["name"], w.data["price"]))
 
-        # ── Save to DB (handles product stock + ingredient deduction) ─────────
+        # ── Payment dialog (cash + change calculator) ─────────────────────────
+        dlg = PaymentDialog(order_rows, self.order_total, parent=self)
+        dlg.exec_()
+        if not dlg.payment_confirmed:
+            return  # cashier cancelled — keep the order open
+
+        # ── Save to DB ────────────────────────────────────────────────────────
         save_order_to_db(order_rows, self.order_total)
 
-        # ── Notify report page ────────────────────────────────────────────────
+        # ── Notify report page ─────────────────────────────────────────────────
         if self.report_page:
             self.report_page.update_sales(report_items, self.order_total)
 
-        # ── Refresh inventory + ingredients pages so numbers update live ──────
+        # ── Refresh inventory page so stock numbers update live ────────────────
         if self.inventory_page:
             self.inventory_page.load_from_db()
 
@@ -798,6 +1075,9 @@ class IMS(QWidget):
         self.price_text.setText("₱0")
         self.red_image.clear()
         self.bottom_box.hide()
+
+        # ── Refresh menu cards so stock counts update ─────────────────────────
+        self.refresh_products()
 
     def set_menu_preview_image(self, path):
         px = QPixmap(path)
@@ -820,9 +1100,14 @@ class IMS(QWidget):
         )
 
     def admin_clicked(self):
-        import subprocess
-        subprocess.Popen([sys.executable, "main.py"])
-        QApplication.quit()
+        reply = QMessageBox.question(
+            self, "Log Out",
+            "Are you sure you want to log out?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            QApplication.exit(LOGOUT_CODE)
 
     def center(self):
         screen = QApplication.primaryScreen().availableGeometry()

@@ -202,8 +202,8 @@ class IngredientsPage(QWidget):
 
         for label, icon_path, page_key in [
             ("  TRANSACTIONS", "pos.png",       "pos"),
-            ("  INVENTORY",    "inventory.png", "inventory"),
             ("  REPORT",       "reports.png",   "report"),
+            ("  INVENTORY", "inventory.png", "inventory"),
         ]:
             btn = QPushButton(label)
             btn.setIcon(QIcon(icon_path))

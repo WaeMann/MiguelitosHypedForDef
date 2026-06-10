@@ -63,8 +63,8 @@ CREATE TABLE IF NOT EXISTS order_items (
     quantity INT,
     size_name VARCHAR(20),
     item_price DECIMAL(10,2),
-    FOREIGN KEY (order_id) REFERENCES orders(id),
-    FOREIGN KEY (product_id) REFERENCES products(id)
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
 );
 
 -- INGREDIENTS

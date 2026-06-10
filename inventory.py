@@ -1219,6 +1219,11 @@ class InventoryPage(QWidget):
             try:
                 db = get_db_connection()
                 cur = db.cursor()
+                # Nullify order_items references so the FK doesn't block deletion
+                cur.execute(
+                    "UPDATE order_items SET product_id = NULL WHERE product_id = %s",
+                    (product_id,)
+                )
                 cur.execute("DELETE FROM products WHERE id = %s", (product_id,))
                 db.commit()
                 db.close()

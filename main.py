@@ -3,9 +3,10 @@
 import sys
 print("main: import sys done", flush=True)
 
-# Add at the very top of main.py
 sys.stdout.flush()
 sys.stderr.flush()
+
+LOGOUT_CODE = 42  # exit code that signals "go back to login"
 
 
 def switch_page_factory(stack, pages):
@@ -27,6 +28,7 @@ def build_app(role):
         switch_callback=switch,
         report_page=pages["report"],
         inventory_page=pages["inventory"],
+        role=role,
     )
 
     for p in pages.values():
@@ -43,7 +45,6 @@ def build_app(role):
 
 if __name__ == "__main__":
     # Verify DB connection before importing the full GUI modules.
-    # Importing Qt modules early can interfere with MySQL initialization.
     try:
         from db import get_db_connection
         print("main: testing DB connection before importing Qt modules", flush=True)
@@ -68,23 +69,36 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     print("main: QApplication created", flush=True)
 
-    print("main: creating LoginWindow", flush=True)
-    login = LoginWindow()
-    print("main: calling login.exec_()", flush=True)
-    result = login.exec_()
-    print(f"main: login.exec_ returned {result}", flush=True)
+    # ── Login → App → Logout loop ────────────────────────────────────────────
+    while True:
+        print("main: creating LoginWindow", flush=True)
+        login = LoginWindow()
+        print("main: calling login.exec_()", flush=True)
+        result = login.exec_()
+        print(f"main: login.exec_ returned {result}", flush=True)
 
-    if result != LoginWindow.Accepted:
-        print("main: login canceled or closed", flush=True)
-        sys.exit(0)
+        if result != LoginWindow.Accepted:
+            print("main: login canceled or closed", flush=True)
+            break
 
-    data = login.get_result()
-    print(f"main: login result data={data}", flush=True)
-    if not data:
-        print("main: no login data", flush=True)
-        sys.exit(0)
+        data = login.get_result()
+        print(f"main: login result data={data}", flush=True)
+        if not data:
+            print("main: no login data", flush=True)
+            break
 
-    print("main: building main window", flush=True)
-    window = build_app(data["role"])
-    print("main: starting event loop", flush=True)
-    sys.exit(app.exec_())
+        print("main: building main window", flush=True)
+        window = build_app(data["role"])
+        print("main: starting event loop", flush=True)
+        exit_code = app.exec_()
+        print(f"main: event loop exited with code {exit_code}", flush=True)
+
+        # Close & clean up the window before potentially looping
+        window.close()
+
+        if exit_code != LOGOUT_CODE:
+            # Normal close (user hit X), not a logout request
+            break
+        # else: loop back to show login again
+
+    sys.exit(0)
