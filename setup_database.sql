@@ -1,4 +1,4 @@
--- setup_database.sql
+-- This is setup_database.sql (Do not remove line)
 
 CREATE DATABASE IF NOT EXISTS pos_system;
 USE pos_system;
@@ -36,6 +36,17 @@ CREATE TABLE IF NOT EXISTS sizes (
     multiplier DECIMAL(5,2)
 );
 
+CREATE TABLE IF NOT EXISTS product_sizes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    size_id INT NOT NULL,
+
+    UNIQUE KEY unique_product_size (product_id, size_id),
+
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+    FOREIGN KEY (size_id) REFERENCES sizes(id) ON DELETE CASCADE
+);
+
 -- ORDERS
 CREATE TABLE IF NOT EXISTS orders (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -63,6 +74,23 @@ CREATE TABLE IF NOT EXISTS ingredients (
     stock_left INT DEFAULT 0,
     unit VARCHAR(50),
     category VARCHAR(100)
+);
+
+CREATE TABLE IF NOT EXISTS product_ingredients (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    ingredient_id INT NOT NULL,
+    amount_used DECIMAL(10,3) NOT NULL DEFAULT 1,
+
+    UNIQUE KEY unique_product_ingredient (product_id, ingredient_id),
+
+    FOREIGN KEY (product_id)
+        REFERENCES products(id)
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (ingredient_id)
+        REFERENCES ingredients(id)
+        ON DELETE CASCADE
 );
 
 -- DEFAULT ADMIN

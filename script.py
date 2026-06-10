@@ -166,14 +166,16 @@ def load_products_from_db():
 
 
 def save_order_to_db(order_rows, total):
-    """Persist a completed order to the orders / order_items tables."""
+    """Persist a completed order and deduct product + ingredient stock."""
     try:
         db = get_db_connection()
         cur = db.cursor()
 
+        # ── 1. Insert order header ────────────────────────────────────────────
         cur.execute("INSERT INTO orders (total) VALUES (%s)", (total,))
         order_id = cur.lastrowid
 
+        # ── 2. Insert order items ─────────────────────────────────────────────
         for row_data in order_rows:
             cur.execute("""
                 INSERT INTO order_items
@@ -188,7 +190,7 @@ def save_order_to_db(order_rows, total):
                 row_data["price"],
             ))
 
-        # Reduce stock in products table
+        # ── 3. Reduce product stock ───────────────────────────────────────────
         for row_data in order_rows:
             if row_data.get("product_id"):
                 cur.execute("""
@@ -196,6 +198,24 @@ def save_order_to_db(order_rows, total):
                     SET stock = GREATEST(0, stock - %s)
                     WHERE id = %s
                 """, (row_data["qty"], row_data["product_id"]))
+
+        # ── 4. Reduce linked ingredient stock ─────────────────────────────────
+        # cursor returns tuples: (ingredient_id, amount_used)
+        for row_data in order_rows:
+            if row_data.get("product_id"):
+                cur.execute("""
+                    SELECT ingredient_id, amount_used
+                    FROM product_ingredients
+                    WHERE product_id = %s
+                """, (row_data["product_id"],))
+                for link in cur.fetchall():
+                    ingredient_id = link[0]
+                    amount_used   = link[1]
+                    cur.execute("""
+                        UPDATE ingredients
+                        SET stock_left = GREATEST(0, stock_left - %s)
+                        WHERE id = %s
+                    """, (float(amount_used) * row_data["qty"], ingredient_id))
 
         db.commit()
         db.close()
@@ -409,10 +429,12 @@ class IMS(QWidget):
         self.scroll_area.setStyleSheet("background-color: #EFE9D1; border: none;")
         self.scroll_content = QWidget()
         self.scroll_area.setWidget(self.scroll_content)
+        self.scroll_content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         menu_layout = QVBoxLayout(self.scroll_content)
         menu_layout.setContentsMargins(20, 20, 20, 20)
         menu_layout.setSpacing(30)
+        menu_layout.setAlignment(Qt.AlignTop)
 
         if self.db_categories:
             for category_name, products in self.db_categories.items():
@@ -620,6 +642,30 @@ class IMS(QWidget):
         if not self.selected_item:
             return
         product = self.product_map.get(self.selected_item, {})
+        product_id = product.get("id")
+
+        # ── Check that at least one ingredient is linked ──────────────────────
+        if product_id:
+            try:
+                db = get_db_connection()
+                cur = db.cursor()
+                cur.execute(
+                    "SELECT COUNT(*) FROM product_ingredients WHERE product_id = %s",
+                    (product_id,)
+                )
+                count = cur.fetchone()[0]
+                db.close()
+                if count == 0:
+                    QMessageBox.warning(
+                        self,
+                        "No Ingredients Linked",
+                        f"'{self.selected_item}' has no ingredients linked.\n"
+                        "Please link ingredients via Inventory → Manage first."
+                    )
+                    return
+            except Exception as err:
+                print(f"[DB] ingredient check error: {err}")
+
         qty = int(self.combo1.currentText())
         size = self.combo2.currentText()
         base = float(product.get("base_price", 0))
@@ -720,27 +766,25 @@ class IMS(QWidget):
         # Collect order rows
         order_rows = []
         report_items = []
-        inventory_items = []
 
         for i in range(self.order_layout.count()):
             w = self.order_layout.itemAt(i).widget()
             if w and hasattr(w, "data"):
                 order_rows.append(w.data)
                 report_items.append((w.data["name"], w.data["price"]))
-                inventory_items.append((w.data["name"], int(w.data["qty"])))
 
-        # Save to DB
+        # ── Save to DB (handles product stock + ingredient deduction) ─────────
         save_order_to_db(order_rows, self.order_total)
 
-        # Notify report page
+        # ── Notify report page ────────────────────────────────────────────────
         if self.report_page:
             self.report_page.update_sales(report_items, self.order_total)
 
-        # Notify inventory page
+        # ── Refresh inventory + ingredients pages so numbers update live ──────
         if self.inventory_page:
-            self.inventory_page.reduce_stock(inventory_items)
+            self.inventory_page.load_from_db()
 
-        # Clear order list
+        # ── Clear order list ──────────────────────────────────────────────────
         for i in reversed(range(self.order_layout.count())):
             item = self.order_layout.itemAt(i)
             if item and item.widget():

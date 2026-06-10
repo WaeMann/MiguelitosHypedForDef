@@ -2,18 +2,22 @@
 if you'd like to change or improve the codes feel free to do as you like.
 
 -If you encounter errors, bugs, or glitches, do not ask-SEARCH THE INTERNET OR USE AI.
-Just kiddin, tell everyone what you think. We'll do what we can to fix it.
+Just kiddin', tell everyone what you think. We'll do what we can to fix it.
 
 INSTRUCTIONS
 
-1. Do not forget to create/add local python interpreter on your IDE.
+Share or download from github: https://github.com/WaeMann/MiguelitosHypedForDef.git
+
+1. Create/add local python interpreter on your IDE.
 settings > python > interpreter > add/create local interpreter
 
-2. Do not forget to install the graphic modules/GUI toolkits/Database connector on your terminals
+2. Install the graphic modules/GUI toolkits/Database connector on your terminals
 if you haven't installed yet
 
 Enter this on your terminal:
-pip install matplotlib pyqt5 mysql-connector-python (change the connector if you're not using MySQL)
+pip install pyqt5
+pip install matplotlib
+pip install mysql-connector-python (change the connector if you're not using MySQL)
 
 3. For database execute setup_database(.)sql then seed_products(.)sql
 Also, change the db.py connector depending on the server where you've set up the executed file/database.
@@ -27,7 +31,7 @@ This shyt
 4. Run the file in main.py (launcher) only. Running the other files is not recommended.
 Does not work when switching windows blah blah blah Because main.py connects the files together blah blah blah
 
-Share or download from github: https://github.com/WaeMann/MiguelitosHypedForDef.git
+5. Use 'TestChisa.jpg' (Remove "C:/Users/Administrator/PycharmProjects/MiguelitosHypedForDef/") in folder for showcasing image function/database.
 
 DevNuts
 
@@ -38,24 +42,25 @@ DevNuts
 * This is not the finished/final product
 ** Problem with POS(script.py) not resizing. Will fix after presenting prototype
 ** Improve colors and design for inventory
-* Fix buttons,label, and text functions in inventory.
+** Fix buttons,label, and text functions in inventory.
 ** Improve REPORT layout and buttons
 * App is not an executable file yet. Would change if needed
 * Add admin/cashier in POS
 ** Add security/login window
-* Add Database
-* Remove/keep Login button in inventory window
-* Add ingredients in inventory.
-* Add confirmation after clicking "COMPLETE ORDER".
-** FOR THE DATABASE- I've created constant/sample items inside script.py.
-Remove them from the file then place inside the database you've created.
-*** Fix the dang database >:(
-*** Separate admin account and cashier account (restrict cashiers from some actions e.g. browse files,
-add/delete/change inventory items, etc.)
+** Add Database
+** Remove/keep Login button in inventory window
+** Add ingredients in inventory.
+** FOR THE DATABASE- I've created constant/sample items inside script.py. Remove them from the file then place inside the database you've created.
+** Fix the dang database >:(
+*** Separate admin account and cashier account (restrict cashiers from some actions e.g. browse files, add/delete/edit inventory items, daily reports, etc.)
 ** Add option to add images to items in inventory
-*** Added ingredients window
+** Add ingredients window
 *** Fix logout. Should go back to login instead of closing itself
-*** Add new window. Ingredients manager
+** Add new window. Ingredients manager
 *** Add automatic change calculator
-*** Add daily reset
+* Add confirmation after clicking "COMPLETE ORDER".
+*** (for report) ---- {create dropdown for each} Current: Total revenue (needs weekly), Sales breakdown by item (needs to be divided to daily, weekly), Item sales breakdown (needs to be divided to daily, weekly), Daily sales.
+*** Add daily reset/shift for report. (e.g. Start time=07:00 End time=21:00)
 *** Add ice to ingredients
+*** Fix PoS not refreshing after every orders, add, edit, delete, etc.
+*** Fix database error in inventory.py. Items not deleting because of foreign key bullsht.

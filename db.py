@@ -23,4 +23,5 @@ def get_db_connection():
         user="root",
         password="6789",
         database="pos_system",
+        connection_timeout=5,
     )
