@@ -142,7 +142,8 @@ class PaymentDialog(QDialog):
         self.payment_confirmed = False
 
         self.setWindowTitle("Payment")
-        self.setFixedSize(440, 560)
+        self.resize(500, 700)  # initial size
+        self.setMinimumSize(440, 670)
         self.setStyleSheet("""
             QDialog { background-color: #FFF8E7; }
             QLabel  { color: #333; }
@@ -174,7 +175,8 @@ class PaymentDialog(QDialog):
         bl = QVBoxLayout(body)
         bl.setContentsMargins(24, 16, 24, 16)
         bl.setSpacing(10)
-        root.addWidget(body, stretch=1)
+        root.addWidget(body)
+        root.setStretchFactor(body, 1)
 
         # ── Order summary ─────────────────────────────────────────────────────
         summary_frame = QFrame()
@@ -195,7 +197,11 @@ class PaymentDialog(QDialog):
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setMaximumHeight(140)
+        scroll.setMinimumHeight(110)
+        scroll.setSizePolicy(
+            QSizePolicy.Expanding,
+            QSizePolicy.Expanding
+        )
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         sc = QWidget()
         sc.setStyleSheet("background: transparent;")
@@ -237,11 +243,19 @@ class PaymentDialog(QDialog):
         bl.addWidget(summary_frame)
 
         # ── Cash tendered ─────────────────────────────────────────────────────
+        # ── Payment Area (2-column layout) ────────────────────────────────
+        payment_row = QHBoxLayout()
+        payment_row.setSpacing(16)
+
+        # LEFT SIDE
+        left_panel = QVBoxLayout()
+        left_panel.setSpacing(10)
+
         cash_lbl = QLabel("CASH TENDERED")
         cash_lbl.setStyleSheet(
             "font-size: 11px; font-weight: bold; color: #888; letter-spacing: 1px;"
         )
-        bl.addWidget(cash_lbl)
+        left_panel.addWidget(cash_lbl)
 
         self.cash_input = QLineEdit()
         self.cash_input.setPlaceholderText("Enter amount…")
@@ -249,24 +263,26 @@ class PaymentDialog(QDialog):
         self.cash_input.setStyleSheet(self.FIELD_STYLE)
         self.cash_input.setFixedHeight(52)
         self.cash_input.textChanged.connect(self._update_change)
-        bl.addWidget(self.cash_input)
+        left_panel.addWidget(self.cash_input)
 
-        # ── Change display ────────────────────────────────────────────────────
+        # Change display
         change_frame = QFrame()
         change_frame.setStyleSheet("""
-            QFrame { background-color: #f0faf4; border-radius: 10px;
-                     border: 1px solid #b2dfcc; }
+            QFrame {
+                background-color: #f0faf4;
+                border-radius: 10px;
+                border: 1px solid #b2dfcc;
+            }
         """)
         change_frame.setFixedHeight(64)
+
         cf_layout = QHBoxLayout(change_frame)
         cf_layout.setContentsMargins(16, 0, 16, 0)
 
         change_title = QLabel("CHANGE")
         change_title.setStyleSheet(
-            "font-size: 11px; font-weight: bold; color: #777; "
-            "letter-spacing: 1px; background: transparent;"
+            "font-size: 11px; font-weight: bold; color: #777;"
         )
-        change_title.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         self.change_val = QLabel("₱—")
         self.change_val.setFont(QFont("Segoe UI", 20, QFont.Bold))
@@ -275,13 +291,62 @@ class PaymentDialog(QDialog):
 
         cf_layout.addWidget(change_title)
         cf_layout.addWidget(self.change_val)
-        bl.addWidget(change_frame)
 
-        bl.addStretch()
+        left_panel.addWidget(change_frame)
+        left_panel.addStretch()
+
+        payment_row.addLayout(left_panel, 2)
+
+        # RIGHT SIDE (NUMPAD)
+        numpad = QFrame()
+        grid = QGridLayout(numpad)
+        grid.setSpacing(8)
+
+        buttons = [
+            ("7", 0, 0), ("8", 0, 1), ("9", 0, 2),
+            ("4", 1, 0), ("5", 1, 1), ("6", 1, 2),
+            ("1", 2, 0), ("2", 2, 1), ("3", 2, 2),
+            ("C", 3, 0), ("0", 3, 1), ("⌫", 3, 2),
+        ]
+
+        for text, row, col in buttons:
+            btn = QPushButton(text)
+            btn.setFixedSize(80, 65)
+
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: white;
+                    border: 1px solid #d9d9d9;
+                    border-radius: 8px;
+                    font-size: 18px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #f5f5f5;
+                }
+                QPushButton:pressed {
+                    background-color: #e8e8e8;
+                }
+            """)
+
+            if text == "C":
+                btn.clicked.connect(self._clear_cash)
+            elif text == "⌫":
+                btn.clicked.connect(self._backspace_cash)
+            else:
+                btn.clicked.connect(
+                    lambda checked=False, digit=text: self._append_digit(digit)
+                )
+
+            grid.addWidget(btn, row, col)
+
+        payment_row.addWidget(numpad, 0)
+
+        bl.addLayout(payment_row)
 
         # ── Confirm button ────────────────────────────────────────────────────
         self.confirm_btn = QPushButton("✔  CONFIRM PAYMENT")
-        self.confirm_btn.setFixedHeight(50)
+        self.confirm_btn.setMinimumHeight(50)
         self.confirm_btn.setFont(QFont("Segoe UI", 13, QFont.Bold))
         self.confirm_btn.setStyleSheet("""
             QPushButton {
@@ -300,7 +365,7 @@ class PaymentDialog(QDialog):
         bl.addWidget(self.confirm_btn)
 
         cancel_btn = QPushButton("Cancel")
-        cancel_btn.setFixedHeight(36)
+        cancel_btn.setMinimumHeight(36)
         cancel_btn.setStyleSheet("""
             QPushButton {
                 background: transparent; color: #888;
@@ -362,6 +427,15 @@ class PaymentDialog(QDialog):
                 pg.x() + (pg.width()  - self.width())  // 2,
                 pg.y() + (pg.height() - self.height()) // 2,
             )
+
+    def _append_digit(self, digit):
+        self.cash_input.setText(self.cash_input.text() + digit)
+
+    def _clear_cash(self):
+        self.cash_input.clear()
+
+    def _backspace_cash(self):
+        self.cash_input.backspace()
 
 
 # ---------------------------------------------------------------------------
