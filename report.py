@@ -87,7 +87,6 @@ class ReportPage(QWidget):
         self.daily_sales = {}
 
         self.setWindowTitle("Hyped Mangoes — Reports")
-        self.showMaximized()
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
 
         self._build_ui()

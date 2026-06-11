@@ -553,7 +553,6 @@ class InventoryPage(QWidget):
         super().__init__()
         self.switch_callback = switch_callback
         self.setWindowTitle("Hyped Mangoes — Inventory")
-        self.showMaximized()
         self.selected_row = None
         self._row_ids = {}
 

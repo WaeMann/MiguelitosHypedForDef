@@ -276,8 +276,7 @@ class LoginWindow(QDialog):
         super().__init__()
         self.result_data = None
         self.setWindowTitle("System Login")
-        self.resize(1200, 600)
-        self.setMinimumSize(800, 480)
+        self.setMinimumSize(1200, 700)
 
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)

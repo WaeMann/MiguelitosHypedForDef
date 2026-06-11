@@ -17,7 +17,9 @@ def switch_page_factory(stack, pages):
 
 
 def build_app(role):
+    from PyQt5.QtCore import Qt
     stack = QStackedWidget()
+    stack.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
     pages = {}
     switch = switch_page_factory(stack, pages)
 
@@ -39,7 +41,7 @@ def build_app(role):
     else:
         stack.setCurrentWidget(pages["pos"])
 
-    stack.showMaximized()
+    stack.showFullScreen()
     return stack
 
 

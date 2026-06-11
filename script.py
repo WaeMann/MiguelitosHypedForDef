@@ -564,8 +564,6 @@ class IMS(QWidget):
             load_products_from_db()
 
         self.setWindowTitle("Inventory Management System")
-        self.setMinimumSize(900, 600)
-        self.resize(1350, 700)
         self.setStyleSheet("QWidget { background-color: #DED6B2; }")
 
         root = QHBoxLayout(self)
@@ -1183,10 +1181,6 @@ class IMS(QWidget):
         if reply == QMessageBox.Yes:
             QApplication.exit(LOGOUT_CODE)
 
-    def center(self):
-        screen = QApplication.primaryScreen().availableGeometry()
-        self.move(screen.center() - self.rect().center())
-
     def eventFilter(self, obj, event):
         if event.type() == event.MouseButtonPress:
             widget = QApplication.widgetAt(event.globalPos())
@@ -1202,5 +1196,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = IMS()
     window.show()
-    window.center()
     sys.exit(app.exec_())

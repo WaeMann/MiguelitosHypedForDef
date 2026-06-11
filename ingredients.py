@@ -168,7 +168,6 @@ class IngredientsPage(QWidget):
         super().__init__()
         self.switch_callback = switch_callback
         self.setWindowTitle("Hyped Mangoes — Ingredients")
-        self.showMaximized()
         self.selected_row = None
         self._row_ids = {}   # table row index → DB id
 
