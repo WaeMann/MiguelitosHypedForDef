@@ -42,6 +42,10 @@ def build_app(role):
         stack.setCurrentWidget(pages["pos"])
 
     stack.showFullScreen()
+    # Lock window to actual fullscreen size so that showing hidden panels
+    # never causes the FramelessWindowHint window to resize beyond the screen.
+    QApplication.processEvents()
+    stack.setFixedSize(stack.width(), stack.height())
     return stack
 
 

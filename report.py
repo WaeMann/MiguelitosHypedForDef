@@ -88,6 +88,8 @@ class ReportPage(QWidget):
 
         self.setWindowTitle("Hyped Mangoes — Reports")
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
+        # Prevent this page's sizeHint from driving the parent window's size.
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         self._build_ui()
         self._load_from_db()

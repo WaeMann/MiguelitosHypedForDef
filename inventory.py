@@ -560,6 +560,8 @@ class InventoryPage(QWidget):
         self._sizes = load_sizes_from_db()
 
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
+        # Prevent this page's sizeHint from driving the parent window's size.
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.initUI()
         self.load_from_db()
 
@@ -639,6 +641,7 @@ class InventoryPage(QWidget):
         # ── TABLE SIDE (left) ─────────────────────────────────────────────────
         table_side = QWidget()
         table_side.setStyleSheet("background: transparent;")
+        table_side.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         table_side_layout = QVBoxLayout(table_side)
         table_side_layout.setContentsMargins(0, 0, 0, 0)
         table_side_layout.setSpacing(10)

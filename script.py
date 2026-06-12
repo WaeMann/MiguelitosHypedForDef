@@ -565,6 +565,8 @@ class IMS(QWidget):
 
         self.setWindowTitle("Inventory Management System")
         self.setStyleSheet("QWidget { background-color: #DED6B2; }")
+        # Prevent this page's sizeHint from driving the parent window's size.
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -751,6 +753,7 @@ class IMS(QWidget):
         # MENU SCROLL AREA
         self.scroll_area = DragScrollArea()
         self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setMinimumHeight(0)   # allow it to compress when bottom_box is shown
         self.scroll_area.setStyleSheet("background-color: #EFE9D1; border: none;")
         self.scroll_content = QWidget()
         self.scroll_area.setWidget(self.scroll_content)
