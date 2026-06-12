@@ -245,6 +245,7 @@ class IngredientsPage(QWidget):
         table_panel = QFrame()
         table_panel.setStyleSheet("QFrame { background-color: white; border-radius: 16px; }")
         drop_shadow(table_panel, blur=30, alpha=120)
+        table_panel.setMinimumHeight(0)   # allow panel to compress when action_bar/edit_form appear
         table_panel_layout = QVBoxLayout(table_panel)
         table_panel_layout.setContentsMargins(16, 16, 16, 16)
         table_panel_layout.setSpacing(12)
@@ -265,6 +266,7 @@ class IngredientsPage(QWidget):
         self.table.verticalHeader().setVisible(False)
         self.table.setShowGrid(True)
         self.table.setFrameShape(QFrame.NoFrame)
+        self.table.setMinimumHeight(0)   # let table compress; it scrolls internally
 
         header = self.table.horizontalHeader()
         header.setStretchLastSection(True)
