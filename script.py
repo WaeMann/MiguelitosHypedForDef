@@ -1011,15 +1011,50 @@ class IMS(QWidget):
     def button_clicked(self):
         if not self.selected_item:
             return
-        product = self.product_map.get(self.selected_item, {})
-        product_id = product.get("id")
 
+        product = self.product_map.get(self.selected_item, {})
         qty = int(self.combo1.currentText())
         size = self.combo2.currentText()
-        base = float(product.get("base_price", 0))
-        price = int(base * self.size_mult.get(size, 1.0)) * qty
 
-        self.order_total += price
+        base = float(product.get("base_price", 0))
+        unit_price = int(base * self.size_mult.get(size, 1.0))
+        added_price = unit_price * qty
+
+        # Check if item already exists in order
+        for i in range(self.order_layout.count()):
+            existing_row = self.order_layout.itemAt(i).widget()
+
+            if (
+                    existing_row
+                    and hasattr(existing_row, "data")
+                    and existing_row.data["name"] == self.selected_item
+                    and existing_row.data["size"] == size
+            ):
+                # Update quantity
+                existing_row.data["qty"] += qty
+
+                # Recalculate row price
+                existing_row.data["price"] = (
+                        unit_price * existing_row.data["qty"]
+                )
+
+                # Update labels
+                existing_row.qty_label.setText(
+                    f"Q: {existing_row.data['qty']}"
+                )
+                existing_row.price_label.setText(
+                    f"₱{existing_row.data['price']}"
+                )
+
+                # Update order total
+                self.order_total += added_price
+                self.total_label.setText(f"Total: ₱{self.order_total}")
+
+                return
+
+        # No existing row found → create a new one
+
+        self.order_total += added_price
         self.total_label.setText(f"Total: ₱{self.order_total}")
 
         row = ClickableRow()
@@ -1030,7 +1065,7 @@ class IMS(QWidget):
             "product_id": product.get("id"),
             "qty": qty,
             "size": size,
-            "price": price,
+            "price": added_price,
             "image": product.get("image_path") or "images/default.png",
         }
 
@@ -1041,7 +1076,7 @@ class IMS(QWidget):
         row.name_label  = QLabel(self.selected_item)
         row.qty_label   = QLabel(f"Q: {qty}")
         row.size_label  = QLabel(f"S: {size}")
-        row.price_label = QLabel(f"₱{price}")
+        row.price_label = QLabel(f"₱{added_price}")
 
         for w in [row.name_label, row.qty_label, row.size_label, row.price_label]:
             w.setStyleSheet("font-size: 13px; color: black;")
