@@ -1,15 +1,13 @@
 import sys
-import re
-
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QPushButton, QFrame, QGridLayout, QGraphicsDropShadowEffect,
     QSizePolicy, QScrollArea, QDialog, QTableWidget, QTableWidgetItem,
-    QHeaderView, QLineEdit, QFormLayout, QComboBox, QMessageBox,
-    QCheckBox, QAbstractItemView,
+    QHeaderView, QMessageBox, QLineEdit, QComboBox,
+    QCheckBox, QAbstractItemView
 )
 from PyQt5.QtCore import Qt, QSize
-from PyQt5.QtGui import QPixmap, QIcon, QColor, QFont
+from PyQt5.QtGui import QPixmap, QIcon, QColor
 from datetime import date
 
 import matplotlib
@@ -20,28 +18,10 @@ from matplotlib.figure import Figure
 from db import get_db_connection, hash_password
 
 
-# ── Colour palette ──────────────────────────────────────────────────────────
-GOLD     = "#E8D28C"
-GOLD_D   = "#D9BE70"
-GOLD_DD  = "#C9A850"
-BLUE     = "#34699A"
-BLUE_D   = "#2a567a"
-GREEN    = "#1e7f3f"
-GREEN_D  = "#166330"
-RED      = "#c0392b"
-RED_D    = "#8e1f16"
-BG       = "#DED6B2"
-SUBBG    = "#EDE7CC"
-BG_L     = "#EFE9D1"
-CREAM    = "#FFF8E7"
-BORDER   = "#c8b87a"
-WHITE    = "#FFFFFF"
-DARK     = "#2b2b2b"
-MID      = "#555555"
-GRAY     = "#888888"
-PANEL_BD = "#ede9dc"
+# ─────────────────────────────────────────────────────────────────────────────
+# STYLE CONSTANTS
+# ─────────────────────────────────────────────────────────────────────────────
 
-# ── Shared style strings ────────────────────────────────────────────────────
 NAV_BTN_STYLE = """
 QPushButton {
     background-color: #E8D28C;
@@ -55,74 +35,141 @@ QPushButton {
 QPushButton:hover { background-color: #D9BE70; }
 """
 
+ADMIN_BTN_STYLE = """
+QPushButton {
+    background-color: #E8D28C;
+    color: #2b2b2b;
+    font-size: 13px;
+    border-radius: 7px;
+    font-weight: bold;
+    border: none;
+    padding: 5px 18px;
+}
+QPushButton:hover  { background-color: #D9BE70; }
+QPushButton:pressed { background-color: #C9A850; }
+"""
+
+DANGER_BTN_STYLE = """
+QPushButton {
+    background-color: #c0392b;
+    color: white;
+    font-size: 12px;
+    border-radius: 6px;
+    font-weight: bold;
+    border: none;
+    padding: 6px 14px;
+}
+QPushButton:hover { background-color: #a93226; }
+"""
+
+BLUE_BTN_STYLE = """
+QPushButton {
+    background-color: #34699A;
+    color: white;
+    font-size: 12px;
+    border-radius: 6px;
+    font-weight: bold;
+    border: none;
+    padding: 6px 14px;
+}
+QPushButton:hover { background-color: #2a567a; }
+"""
+
+GREEN_BTN_STYLE = """
+QPushButton {
+    background-color: #1e7f3f;
+    color: white;
+    font-size: 12px;
+    border-radius: 6px;
+    font-weight: bold;
+    border: none;
+    padding: 6px 14px;
+}
+QPushButton:hover { background-color: #175f30; }
+"""
+
+AMBER_BTN_STYLE = """
+QPushButton {
+    background-color: #d97706;
+    color: white;
+    font-size: 12px;
+    border-radius: 6px;
+    font-weight: bold;
+    border: none;
+    padding: 6px 14px;
+}
+QPushButton:hover { background-color: #b45309; }
+"""
+
+CANCEL_BTN_STYLE = """
+QPushButton {
+    background-color: #d6d0bc;
+    color: #444;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: bold;
+    border: none;
+}
+QPushButton:hover { background-color: #c5bfa6; }
+"""
+
 TABLE_STYLE = """
 QTableWidget {
-    background: white;
+    background-color: white;
     border: none;
     gridline-color: #ede9dc;
     font-size: 13px;
-    color: #2b2b2b;
     outline: none;
 }
-QTableWidget::item          { padding: 5px 10px; border: none; }
-QTableWidget::item:selected { background: #E8D28C; color: #222222; }
+QTableWidget::item {
+    padding: 6px 10px;
+    border-bottom: 1px solid #ede9dc;
+    color: #2b2b2b;
+}
+QTableWidget::item:selected {
+    background-color: #E8D28C;
+    color: #2b2b2b;
+}
+QTableWidget { alternate-background-color: #fafaf7; }
 QHeaderView::section {
-    background: #DED6B2;
-    color: #333;
+    background-color: #2b2b2b;
+    color: #E8D28C;
     font-weight: bold;
+    font-size: 12px;
     padding: 8px 10px;
     border: none;
-    border-bottom: 2px solid #c8b87a;
-    font-size: 12px;
+    border-right: 1px solid #3d3d3d;
 }
-QScrollBar:vertical {
-    background: #EFE9D1; width: 8px; border-radius: 4px; margin: 2px;
-}
-QScrollBar::handle:vertical {
-    background: #c8b87a; border-radius: 4px; min-height: 20px;
-}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-QScrollBar:horizontal {
-    background: #EFE9D1; height: 8px; border-radius: 4px; margin: 2px;
-}
-QScrollBar::handle:horizontal {
-    background: #c8b87a; border-radius: 4px; min-width: 20px;
-}
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
 """
 
-FIELD_STYLE = """
+INPUT_STYLE = """
 QLineEdit {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 8px 12px;
+    border: 1px solid #c8b87a;
+    border-radius: 6px;
+    padding: 7px 10px;
     font-size: 13px;
     background: white;
-    color: #333;
+    color: #2b2b2b;
 }
-QLineEdit:focus { border: 1.5px solid #E8D28C; }
-"""
-
-COMBO_STYLE = """
+QLineEdit:focus { border: 2px solid #E8D28C; }
 QComboBox {
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    padding: 6px 12px;
-    font-size: 13px;
+    border: 1px solid #c8b87a;
+    border-radius: 6px;
+    padding: 5px 8px;
     background: white;
-    color: #333;
-    min-height: 36px;
+    font-size: 13px;
+    color: #2b2b2b;
+    min-height: 32px;
 }
-QComboBox:focus { border: 1.5px solid #E8D28C; }
+QComboBox::drop-down { border: none; width: 24px; }
 QComboBox QAbstractItemView {
     background: white;
     selection-background-color: #E8D28C;
-    selection-color: #222;
-    border: 1px solid #ccc;
+    selection-color: #2b2b2b;
 }
+QCheckBox { color: #555; font-size: 12px; background: transparent; }
 """
-
-DIALOG_BASE = f"QDialog {{ background-color: {CREAM}; }}"
 
 CHART_COLORS = [
     "#E8D28C", "#34699A", "#c0392b", "#1e7f3f",
@@ -130,976 +177,22 @@ CHART_COLORS = [
 ]
 
 
-# ── Generic helpers ──────────────────────────────────────────────────────────
-def drop_shadow(widget, blur=25, x=3, y=3, alpha=150):
-    fx = QGraphicsDropShadowEffect()
-    fx.setBlurRadius(blur)
-    fx.setXOffset(x)
-    fx.setYOffset(y)
-    fx.setColor(QColor(0, 0, 0, alpha))
-    widget.setGraphicsEffect(fx)
-    return fx
+# ─────────────────────────────────────────────────────────────────────────────
+# SHARED HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
 
-
-def make_panel(bg=WHITE, radius=14):
-    p = QFrame()
-    p.setStyleSheet(f"QFrame {{ background-color: {bg}; border-radius: {radius}px; }}")
-    return p
-
-
-def styled_btn(text, bg, hover, fg="white", font_size=11, min_w=0):
-    b = QPushButton(text)
-    b.setCursor(Qt.PointingHandCursor)
-    b.setFont(QFont("Segoe UI", font_size, QFont.Bold))
-    mw = f"min-width: {min_w}px;" if min_w else ""
-    b.setStyleSheet(f"""
-        QPushButton {{
-            background-color: {bg}; color: {fg};
-            border: none; border-radius: 8px;
-            padding: 7px 18px; {mw}
-        }}
-        QPushButton:hover  {{ background-color: {hover}; }}
-        QPushButton:pressed {{ background-color: {hover}; }}
-    """)
-    return b
-
-
-def dialog_header(title_text, bg=GOLD, fg=DARK):
-    hdr = QFrame()
-    hdr.setFixedHeight(58)
-    hdr.setStyleSheet(f"QFrame {{ background-color: {bg}; border-radius: 0px; }}")
-    hl = QHBoxLayout(hdr)
-    hl.setContentsMargins(22, 0, 22, 0)
-    lbl = QLabel(title_text)
-    lbl.setFont(QFont("Segoe UI", 14, QFont.Bold))
-    lbl.setStyleSheet(f"color: {fg}; background: transparent;")
-    hl.addWidget(lbl)
-    return hdr
-
-
-def validate_username(u):
-    if len(u) < 3:
-        return False, "Username must be at least 3 characters."
-    if len(u) > 32:
-        return False, "Username must be at most 32 characters."
-    if not re.match(r"^[A-Za-z0-9_]+$", u):
-        return False, "Only letters, numbers and underscores allowed."
-    return True, "OK"
-
-
-def validate_password(p):
-    if len(p) < 6:
-        return False, "Password must be at least 6 characters."
-    return True, "OK"
-
-
-def center_on_parent(dialog):
-    if dialog.parent():
-        pg = dialog.parent().geometry()
-        dialog.move(
-            pg.x() + (pg.width()  - dialog.width())  // 2,
-            pg.y() + (pg.height() - dialog.height()) // 2,
-        )
-
-
-# ════════════════════════════════════════════════════════════════════════════
-#  ORDER DETAIL DIALOG
-# ════════════════════════════════════════════════════════════════════════════
-class OrderDetailDialog(QDialog):
-    def __init__(self, order_id, parent=None):
-        super().__init__(parent)
-        self.order_id = order_id
-        self.setWindowTitle(f"Order #{order_id} — Details")
-        self.resize(500, 520)
-        self.setMinimumSize(440, 400)
-        self.setStyleSheet(DIALOG_BASE)
-        self._build()
-        center_on_parent(self)
-
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-        root.addWidget(dialog_header(f"📋  Order #{self.order_id} — Details", BLUE, WHITE))
-
-        body = QWidget()
-        body.setStyleSheet("background: transparent;")
-        bl = QVBoxLayout(body)
-        bl.setContentsMargins(20, 16, 20, 16)
-        bl.setSpacing(12)
-
-        try:
-            db = get_db_connection()
-            cur = db.cursor(dictionary=True)
-            cur.execute("SELECT * FROM orders WHERE id = %s", (self.order_id,))
-            order = cur.fetchone()
-            cur.execute(
-                "SELECT product_name, quantity, size_name, item_price "
-                "FROM order_items WHERE order_id = %s",
-                (self.order_id,)
-            )
-            items = cur.fetchall()
-            db.close()
-
-            # Meta card
-            meta = QFrame()
-            meta.setStyleSheet(
-                f"QFrame {{ background: white; border-radius: 10px; border: 1px solid {PANEL_BD}; }}"
-            )
-            mcl = QVBoxLayout(meta)
-            mcl.setContentsMargins(16, 12, 16, 12)
-            mcl.setSpacing(6)
-            if order:
-                for k_text, v_text in [
-                    ("Order ID",    f"#{order['id']}"),
-                    ("Date / Time", str(order.get("created_at", "—"))),
-                    ("Total",       f"₱{float(order.get('total', 0)):,.2f}"),
-                ]:
-                    row_l = QHBoxLayout()
-                    k_lbl = QLabel(f"{k_text}:")
-                    k_lbl.setStyleSheet(
-                        f"font-size: 12px; color: {GRAY}; background: transparent; min-width: 95px;"
-                    )
-                    v_lbl = QLabel(v_text)
-                    v_lbl.setFont(QFont("Segoe UI", 12, QFont.Bold))
-                    v_lbl.setStyleSheet(f"color: {DARK}; background: transparent;")
-                    row_l.addWidget(k_lbl)
-                    row_l.addWidget(v_lbl)
-                    row_l.addStretch()
-                    mcl.addLayout(row_l)
-            bl.addWidget(meta)
-
-            items_hdr = QLabel("ORDER ITEMS")
-            items_hdr.setStyleSheet(
-                f"font-size: 10px; font-weight: bold; color: {GRAY}; "
-                "letter-spacing: 2px; background: transparent;"
-            )
-            bl.addWidget(items_hdr)
-
-            tbl = QTableWidget(len(items), 4)
-            tbl.setHorizontalHeaderLabels(["Product", "Size", "Qty", "Price"])
-            tbl.setStyleSheet(TABLE_STYLE)
-            tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
-            tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
-            tbl.verticalHeader().setVisible(False)
-            tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-            for i in (1, 2, 3):
-                tbl.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeToContents)
-
-            for r, itm in enumerate(items):
-                tbl.setItem(r, 0, QTableWidgetItem(itm.get("product_name", "—")))
-                s = QTableWidgetItem(itm.get("size_name") or "—")
-                s.setTextAlignment(Qt.AlignCenter)
-                tbl.setItem(r, 1, s)
-                q = QTableWidgetItem(str(itm.get("quantity", 0)))
-                q.setTextAlignment(Qt.AlignCenter)
-                tbl.setItem(r, 2, q)
-                p = QTableWidgetItem(f"₱{float(itm.get('item_price', 0)):,.2f}")
-                p.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                tbl.setItem(r, 3, p)
-            bl.addWidget(tbl, stretch=1)
-
-        except Exception as err:
-            err_lbl = QLabel(f"Error loading order details:\n{err}")
-            err_lbl.setStyleSheet(f"color: {RED}; font-size: 13px; background: transparent;")
-            err_lbl.setWordWrap(True)
-            bl.addWidget(err_lbl)
-
-        bl.addStretch()
-        close_btn = styled_btn("✖  Close", GOLD, GOLD_D, DARK)
-        close_btn.setFixedWidth(110)
-        row = QHBoxLayout()
-        row.addStretch()
-        row.addWidget(close_btn)
-        bl.addLayout(row)
-        close_btn.clicked.connect(self.accept)
-        root.addWidget(body, stretch=1)
-
-
-# ════════════════════════════════════════════════════════════════════════════
-#  ORDERS DIALOG
-# ════════════════════════════════════════════════════════════════════════════
-class OrdersDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("All Orders")
-        self.resize(840, 580)
-        self.setMinimumSize(680, 460)
-        self.setStyleSheet(DIALOG_BASE)
-        self._build()
-        self._load()
-        center_on_parent(self)
-
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-        root.addWidget(dialog_header("📋  All Orders", BLUE, WHITE))
-
-        # Toolbar
-        bar = QFrame()
-        bar.setStyleSheet(f"QFrame {{ background: {CREAM}; border: none; }}")
-        bar.setFixedHeight(50)
-        bl = QHBoxLayout(bar)
-        bl.setContentsMargins(16, 8, 16, 8)
-        bl.setSpacing(8)
-        ref_btn = styled_btn("🔄  Refresh", GOLD, GOLD_D, DARK, 10)
-        ref_btn.clicked.connect(self._load)
-        view_btn = styled_btn("🔍  View Details", BLUE, BLUE_D, font_size=10)
-        view_btn.clicked.connect(self._view_detail)
-        for b in (ref_btn, view_btn):
-            bl.addWidget(b)
-        bl.addStretch()
-        self._count_lbl = QLabel("")
-        self._count_lbl.setStyleSheet(
-            f"font-size: 12px; color: {GRAY}; background: transparent;"
-        )
-        bl.addWidget(self._count_lbl)
-        root.addWidget(bar)
-
-        # Body
-        body = QWidget()
-        body.setStyleSheet("background: transparent;")
-        bvl = QVBoxLayout(body)
-        bvl.setContentsMargins(16, 8, 16, 16)
-        bvl.setSpacing(8)
-
-        self._tbl = QTableWidget(0, 4)
-        self._tbl.setHorizontalHeaderLabels(["Order ID", "Date / Time", "# Items", "Total"])
-        self._tbl.setStyleSheet(TABLE_STYLE)
-        self._tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._tbl.setAlternatingRowColors(True)
-        self._tbl.verticalHeader().setVisible(False)
-        self._tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self._tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self._tbl.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self._tbl.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self._tbl.doubleClicked.connect(self._view_detail)
-        bvl.addWidget(self._tbl)
-
-        hint = QLabel("💡  Double-click any row to view full order details")
-        hint.setStyleSheet(f"font-size: 11px; color: {GRAY}; background: transparent;")
-        hint.setAlignment(Qt.AlignCenter)
-        bvl.addWidget(hint)
-
-        close_btn = styled_btn("✖  Close", GOLD, GOLD_D, DARK)
-        close_btn.setFixedWidth(110)
-        close_btn.clicked.connect(self.accept)
-        row = QHBoxLayout()
-        row.addStretch()
-        row.addWidget(close_btn)
-        bvl.addLayout(row)
-        root.addWidget(body, stretch=1)
-
-    def _load(self):
-        self._tbl.setRowCount(0)
-        try:
-            db = get_db_connection()
-            cur = db.cursor(dictionary=True)
-            cur.execute("""
-                SELECT o.id, o.total, o.created_at,
-                       COUNT(oi.id) AS item_count
-                FROM orders o
-                LEFT JOIN order_items oi ON o.id = oi.order_id
-                GROUP BY o.id
-                ORDER BY o.created_at DESC
-                LIMIT 500
-            """)
-            rows = cur.fetchall()
-            db.close()
-
-            self._tbl.setRowCount(len(rows))
-            for r, row in enumerate(rows):
-                id_item = QTableWidgetItem(f"#{row['id']}")
-                id_item.setTextAlignment(Qt.AlignCenter)
-                id_item.setData(Qt.UserRole, row["id"])
-                self._tbl.setItem(r, 0, id_item)
-                self._tbl.setItem(r, 1, QTableWidgetItem(str(row["created_at"])))
-                cnt = QTableWidgetItem(str(row["item_count"] or 0))
-                cnt.setTextAlignment(Qt.AlignCenter)
-                self._tbl.setItem(r, 2, cnt)
-                total = QTableWidgetItem(f"₱{float(row['total'] or 0):,.2f}")
-                total.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                self._tbl.setItem(r, 3, total)
-
-            self._count_lbl.setText(f"{len(rows)} order(s) loaded")
-        except Exception as err:
-            QMessageBox.critical(self, "Database Error", f"Could not load orders:\n{err}")
-
-    def _view_detail(self):
-        row = self._tbl.currentRow()
-        if row < 0:
-            QMessageBox.information(self, "No Selection", "Please select an order first.")
-            return
-        id_item = self._tbl.item(row, 0)
-        if not id_item:
-            return
-        OrderDetailDialog(id_item.data(Qt.UserRole), self).exec_()
-
-
-# ════════════════════════════════════════════════════════════════════════════
-#  SALES SUMMARY DIALOG
-# ════════════════════════════════════════════════════════════════════════════
-class SummaryDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Sales Summary")
-        self.setFixedSize(560, 570)
-        self.setStyleSheet(DIALOG_BASE)
-        self._build()
-        center_on_parent(self)
-
-    # ── helpers ──────────────────────────────────────────────────────────────
-    def _stat_card(self, val_lbl, label_text, color):
-        card = make_panel()
-        drop_shadow(card, blur=18, alpha=70)
-        cl = QVBoxLayout(card)
-        cl.setContentsMargins(0, 0, 0, 0)
-        cl.setSpacing(0)
-        stripe = QFrame()
-        stripe.setFixedHeight(4)
-        stripe.setStyleSheet(f"background: {color}; border-radius: 2px;")
-        cl.addWidget(stripe)
-        inner = QVBoxLayout()
-        inner.setContentsMargins(14, 10, 14, 10)
-        inner.setSpacing(2)
-        lbl_w = QLabel(label_text)
-        lbl_w.setStyleSheet(f"font-size: 11px; color: {GRAY}; background: transparent;")
-        val_lbl.setFont(QFont("Segoe UI", 17, QFont.Bold))
-        val_lbl.setStyleSheet(f"color: {color}; background: transparent;")
-        inner.addWidget(lbl_w)
-        inner.addWidget(val_lbl)
-        cl.addLayout(inner)
-        return card
-
-    def _section_label(self, text):
-        lbl = QLabel(text)
-        lbl.setStyleSheet(
-            f"font-size: 10px; font-weight: bold; color: {GRAY}; "
-            "letter-spacing: 2px; background: transparent;"
-        )
-        return lbl
-
-    # ── build ─────────────────────────────────────────────────────────────────
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-        root.addWidget(dialog_header("📊  Sales Summary", GREEN, WHITE))
-
-        body = QWidget()
-        body.setStyleSheet("background: transparent;")
-        bl = QVBoxLayout(body)
-        bl.setContentsMargins(24, 18, 24, 18)
-        bl.setSpacing(12)
-
-        # ── today cards ──────────────────────────────────────────────────────
-        bl.addWidget(self._section_label("TODAY'S SALES"))
-        today_row = QHBoxLayout()
-        today_row.setSpacing(10)
-        self._t_orders = QLabel("—")
-        self._t_rev    = QLabel("—")
-        self._t_avg    = QLabel("—")
-        for val_lbl, label, color in [
-            (self._t_orders, "Orders",    BLUE),
-            (self._t_rev,    "Revenue",   GREEN),
-            (self._t_avg,    "Avg Order", GOLD_DD),
-        ]:
-            today_row.addWidget(self._stat_card(val_lbl, label, color))
-        bl.addLayout(today_row)
-
-        # ── all-time cards ───────────────────────────────────────────────────
-        bl.addWidget(self._section_label("ALL-TIME SALES"))
-        all_row = QHBoxLayout()
-        all_row.setSpacing(10)
-        self._a_orders = QLabel("—")
-        self._a_rev    = QLabel("—")
-        self._a_avg    = QLabel("—")
-        for val_lbl, label, color in [
-            (self._a_orders, "Orders",    BLUE),
-            (self._a_rev,    "Revenue",   GREEN),
-            (self._a_avg,    "Avg Order", GOLD_DD),
-        ]:
-            all_row.addWidget(self._stat_card(val_lbl, label, color))
-        bl.addLayout(all_row)
-
-        # ── top-5 panel ──────────────────────────────────────────────────────
-        bl.addWidget(self._section_label("TOP 5 ITEMS  (ALL-TIME)"))
-        self._top_frame = QFrame()
-        self._top_frame.setStyleSheet(
-            f"QFrame {{ background: white; border-radius: 10px; "
-            f"border: 1px solid {PANEL_BD}; }}"
-        )
-        self._top_layout = QVBoxLayout(self._top_frame)
-        self._top_layout.setContentsMargins(14, 10, 14, 10)
-        self._top_layout.setSpacing(5)
-        bl.addWidget(self._top_frame, stretch=1)
-
-        # ── buttons ──────────────────────────────────────────────────────────
-        btn_row = QHBoxLayout()
-        ref_btn   = styled_btn("🔄  Refresh", GOLD,  GOLD_D,  DARK, min_w=110)
-        close_btn = styled_btn("✖  Close",    BLUE,  BLUE_D,       min_w=110)
-        ref_btn.clicked.connect(self._load)
-        close_btn.clicked.connect(self.accept)
-        btn_row.addWidget(ref_btn)
-        btn_row.addStretch()
-        btn_row.addWidget(close_btn)
-        bl.addLayout(btn_row)
-
-        root.addWidget(body, stretch=1)
-        self._load()
-
-    # ── data ─────────────────────────────────────────────────────────────────
-    def _load(self):
-        today_str = date.today().isoformat()
-        try:
-            db = get_db_connection()
-            cur = db.cursor(dictionary=True)
-
-            # Today
-            cur.execute(
-                "SELECT COUNT(*) AS cnt, COALESCE(SUM(total), 0) AS rev "
-                "FROM orders WHERE DATE(created_at) = %s",
-                (today_str,)
-            )
-            row = cur.fetchone()
-            tc = row["cnt"] or 0
-            tr = float(row["rev"] or 0)
-            self._t_orders.setText(str(tc))
-            self._t_rev.setText(f"₱{tr:,.2f}")
-            self._t_avg.setText(f"₱{tr / tc:,.2f}" if tc else "₱0.00")
-
-            # All-time
-            cur.execute(
-                "SELECT COUNT(*) AS cnt, COALESCE(SUM(total), 0) AS rev FROM orders"
-            )
-            row = cur.fetchone()
-            ac = row["cnt"] or 0
-            ar = float(row["rev"] or 0)
-            self._a_orders.setText(str(ac))
-            self._a_rev.setText(f"₱{ar:,.2f}")
-            self._a_avg.setText(f"₱{ar / ac:,.2f}" if ac else "₱0.00")
-
-            # Top 5
-            cur.execute("""
-                SELECT product_name, SUM(item_price) AS total
-                FROM order_items
-                GROUP BY product_name
-                ORDER BY total DESC
-                LIMIT 5
-            """)
-            top = cur.fetchall()
-            db.close()
-
-            # Rebuild top-items list in-place
-            while self._top_layout.count():
-                w = self._top_layout.takeAt(0).widget()
-                if w:
-                    w.deleteLater()
-
-            if not top:
-                empty = QLabel("No sales data yet.")
-                empty.setStyleSheet(
-                    f"font-size: 13px; color: {GRAY}; background: transparent;"
-                )
-                empty.setAlignment(Qt.AlignCenter)
-                self._top_layout.addWidget(empty)
-            else:
-                max_val = float(top[0]["total"] or 1)
-                for i, itm in enumerate(top):
-                    val = float(itm["total"] or 0)
-                    row_w = QFrame()
-                    row_w.setStyleSheet("QFrame { background: transparent; border: none; }")
-                    row_l = QHBoxLayout(row_w)
-                    row_l.setContentsMargins(0, 2, 0, 2)
-                    row_l.setSpacing(8)
-
-                    dot = QLabel("●")
-                    dot.setStyleSheet(
-                        f"color: {CHART_COLORS[i % len(CHART_COLORS)]}; "
-                        "font-size: 16px; background: transparent;"
-                    )
-                    dot.setFixedWidth(20)
-
-                    name_lbl = QLabel(itm["product_name"])
-                    name_lbl.setStyleSheet(
-                        f"font-size: 13px; color: {DARK}; background: transparent;"
-                    )
-                    name_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-
-                    val_lbl = QLabel(f"₱{val:,.2f}")
-                    val_lbl.setStyleSheet(
-                        f"font-size: 13px; font-weight: bold; "
-                        f"color: {DARK}; background: transparent;"
-                    )
-                    val_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
-                    pct_lbl = QLabel(f"{val / max_val * 100:.0f}%")
-                    pct_lbl.setStyleSheet(
-                        f"font-size: 12px; color: {GRAY}; "
-                        "background: transparent; min-width: 42px;"
-                    )
-                    pct_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-
-                    for w in (dot, name_lbl, val_lbl, pct_lbl):
-                        row_l.addWidget(w)
-                    self._top_layout.addWidget(row_w)
-
-        except Exception as err:
-            for lbl in (self._t_orders, self._t_rev, self._t_avg,
-                        self._a_orders, self._a_rev, self._a_avg):
-                lbl.setText("—")
-            print(f"[SummaryDialog] DB error: {err}")
-
-
-# ════════════════════════════════════════════════════════════════════════════
-#  ADD USER DIALOG
-# ════════════════════════════════════════════════════════════════════════════
-class AddUserDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Add New User")
-        self.setFixedSize(400, 420)
-        self.setStyleSheet(DIALOG_BASE)
-        self._build()
-        center_on_parent(self)
-
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-        root.addWidget(dialog_header("➕  Add New User", GREEN, WHITE))
-
-        body = QWidget()
-        body.setStyleSheet("background: transparent;")
-        bl = QVBoxLayout(body)
-        bl.setContentsMargins(30, 18, 30, 18)
-        bl.setSpacing(8)
-
-        def field(label, widget):
-            lbl = QLabel(label)
-            lbl.setStyleSheet(
-                f"font-size: 12px; font-weight: bold; color: {MID}; background: transparent;"
-            )
-            bl.addWidget(lbl)
-            bl.addWidget(widget)
-
-        self.user_edit = QLineEdit()
-        self.user_edit.setPlaceholderText("e.g.  juan_mango")
-        self.user_edit.setStyleSheet(FIELD_STYLE)
-        self.user_edit.setFixedHeight(38)
-        field("Username", self.user_edit)
-
-        self.role_combo = QComboBox()
-        self.role_combo.addItems(["cashier", "admin"])
-        self.role_combo.setStyleSheet(COMBO_STYLE)
-        field("Role", self.role_combo)
-
-        self.pass_edit = QLineEdit()
-        self.pass_edit.setPlaceholderText("min. 6 characters")
-        self.pass_edit.setEchoMode(QLineEdit.Password)
-        self.pass_edit.setStyleSheet(FIELD_STYLE)
-        self.pass_edit.setFixedHeight(38)
-        field("Password", self.pass_edit)
-
-        self.confirm_edit = QLineEdit()
-        self.confirm_edit.setPlaceholderText("confirm password")
-        self.confirm_edit.setEchoMode(QLineEdit.Password)
-        self.confirm_edit.setStyleSheet(FIELD_STYLE)
-        self.confirm_edit.setFixedHeight(38)
-        field("Confirm Password", self.confirm_edit)
-
-        show_cb = QCheckBox("Show Password")
-        show_cb.setStyleSheet(f"font-size: 12px; color: {MID}; background: transparent;")
-        show_cb.toggled.connect(self._toggle_pw)
-        bl.addWidget(show_cb)
-
-        self._status = QLabel("")
-        self._status.setStyleSheet(
-            f"color: {RED}; font-size: 12px; background: transparent;"
-        )
-        self._status.setWordWrap(True)
-        bl.addWidget(self._status)
-
-        bl.addStretch()
-        btn_row = QHBoxLayout()
-        cancel_btn = styled_btn("Cancel",          GOLD,  GOLD_D,  DARK)
-        create_btn = styled_btn("➕  Create User",  GREEN, GREEN_D)
-        cancel_btn.clicked.connect(self.reject)
-        create_btn.clicked.connect(self._create)
-        btn_row.addWidget(cancel_btn)
-        btn_row.addStretch()
-        btn_row.addWidget(create_btn)
-        bl.addLayout(btn_row)
-
-        root.addWidget(body, stretch=1)
-        self.user_edit.setFocus()
-
-    def _toggle_pw(self, on):
-        m = QLineEdit.Normal if on else QLineEdit.Password
-        self.pass_edit.setEchoMode(m)
-        self.confirm_edit.setEchoMode(m)
-
-    def _create(self):
-        u    = self.user_edit.text().strip()
-        p    = self.pass_edit.text()
-        cp   = self.confirm_edit.text()
-        role = self.role_combo.currentText()
-
-        ok, msg = validate_username(u)
-        if not ok:
-            self._status.setText(f"✖  {msg}"); return
-
-        ok, msg = validate_password(p)
-        if not ok:
-            self._status.setText(f"✖  {msg}"); return
-
-        if p != cp:
-            self._status.setText("✖  Passwords do not match."); return
-
-        try:
-            db = get_db_connection()
-            cur = db.cursor(buffered=True)
-            cur.execute("SELECT id FROM users WHERE username = %s", (u,))
-            if cur.fetchone():
-                self._status.setText(f"✖  Username '{u}' already exists.")
-                db.close(); return
-            cur.execute(
-                "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)",
-                (u, hash_password(p), role),
-            )
-            db.commit()
-            db.close()
-            QMessageBox.information(
-                self, "✅  User Created",
-                f"Account '{u}'  ({role})  created successfully!"
-            )
-            self.accept()
-        except Exception as err:
-            self._status.setText(f"✖  {err}")
-
-
-# ════════════════════════════════════════════════════════════════════════════
-#  EDIT USER DIALOG
-# ════════════════════════════════════════════════════════════════════════════
-class EditUserDialog(QDialog):
-    def __init__(self, user_row, parent=None):
-        super().__init__(parent)
-        self.user_row = user_row
-        self.setWindowTitle(f"Edit — {user_row['username']}")
-        self.setFixedSize(400, 410)
-        self.setStyleSheet(DIALOG_BASE)
-        self._build()
-        center_on_parent(self)
-
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-        root.addWidget(dialog_header(f"✏️  Edit: {self.user_row['username']}", GOLD, DARK))
-
-        body = QWidget()
-        body.setStyleSheet("background: transparent;")
-        bl = QVBoxLayout(body)
-        bl.setContentsMargins(30, 18, 30, 18)
-        bl.setSpacing(8)
-
-        def field(label, widget):
-            lbl = QLabel(label)
-            lbl.setStyleSheet(
-                f"font-size: 12px; font-weight: bold; color: {MID}; background: transparent;"
-            )
-            bl.addWidget(lbl)
-            bl.addWidget(widget)
-
-        self.role_combo = QComboBox()
-        self.role_combo.addItems(["cashier", "admin"])
-        self.role_combo.setCurrentText(self.user_row.get("role", "cashier"))
-        self.role_combo.setStyleSheet(COMBO_STYLE)
-        field("Role", self.role_combo)
-
-        self.pass_edit = QLineEdit()
-        self.pass_edit.setPlaceholderText("leave blank to keep current password")
-        self.pass_edit.setEchoMode(QLineEdit.Password)
-        self.pass_edit.setStyleSheet(FIELD_STYLE)
-        self.pass_edit.setFixedHeight(38)
-        field("New Password  (optional)", self.pass_edit)
-
-        self.confirm_edit = QLineEdit()
-        self.confirm_edit.setPlaceholderText("confirm new password")
-        self.confirm_edit.setEchoMode(QLineEdit.Password)
-        self.confirm_edit.setStyleSheet(FIELD_STYLE)
-        self.confirm_edit.setFixedHeight(38)
-        field("Confirm Password", self.confirm_edit)
-
-        show_cb = QCheckBox("Show Password")
-        show_cb.setStyleSheet(f"font-size: 12px; color: {MID}; background: transparent;")
-        show_cb.toggled.connect(self._toggle_pw)
-        bl.addWidget(show_cb)
-
-        self._status = QLabel("")
-        self._status.setStyleSheet(
-            f"color: {RED}; font-size: 12px; background: transparent;"
-        )
-        self._status.setWordWrap(True)
-        bl.addWidget(self._status)
-
-        bl.addStretch()
-        btn_row = QHBoxLayout()
-        cancel_btn = styled_btn("Cancel",           GOLD,  GOLD_D,  DARK)
-        save_btn   = styled_btn("💾  Save Changes",  GREEN, GREEN_D)
-        cancel_btn.clicked.connect(self.reject)
-        save_btn.clicked.connect(self._save)
-        btn_row.addWidget(cancel_btn)
-        btn_row.addStretch()
-        btn_row.addWidget(save_btn)
-        bl.addLayout(btn_row)
-
-        root.addWidget(body, stretch=1)
-
-    def _toggle_pw(self, on):
-        m = QLineEdit.Normal if on else QLineEdit.Password
-        self.pass_edit.setEchoMode(m)
-        self.confirm_edit.setEchoMode(m)
-
-    def _save(self):
-        new_role = self.role_combo.currentText()
-        new_pass = self.pass_edit.text()
-        confirm  = self.confirm_edit.text()
-
-        if new_pass:
-            ok, msg = validate_password(new_pass)
-            if not ok:
-                self._status.setText(f"✖  {msg}"); return
-            if new_pass != confirm:
-                self._status.setText("✖  Passwords do not match."); return
-
-        try:
-            db = get_db_connection()
-            cur = db.cursor()
-            if new_pass:
-                cur.execute(
-                    "UPDATE users SET role=%s, password_hash=%s WHERE id=%s",
-                    (new_role, hash_password(new_pass), self.user_row["id"])
-                )
-            else:
-                cur.execute(
-                    "UPDATE users SET role=%s WHERE id=%s",
-                    (new_role, self.user_row["id"])
-                )
-            db.commit()
-            db.close()
-            QMessageBox.information(self, "✅  Saved", "User updated successfully!")
-            self.accept()
-        except Exception as err:
-            self._status.setText(f"✖  {err}")
-
-
-# ════════════════════════════════════════════════════════════════════════════
-#  USER MANAGEMENT DIALOG
-# ════════════════════════════════════════════════════════════════════════════
-class UsersDialog(QDialog):
-    def __init__(self, current_username="admin", parent=None):
-        super().__init__(parent)
-        self.current_username = current_username
-        self.setWindowTitle("User Management")
-        self.resize(780, 540)
-        self.setMinimumSize(640, 440)
-        self.setStyleSheet(DIALOG_BASE)
-        self._build()
-        self._load()
-        center_on_parent(self)
-
-    def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(0)
-        root.addWidget(dialog_header("👤  User Management", GOLD, DARK))
-
-        # Toolbar
-        bar = QFrame()
-        bar.setStyleSheet(f"QFrame {{ background: {CREAM}; border: none; }}")
-        bar.setFixedHeight(52)
-        bl = QHBoxLayout(bar)
-        bl.setContentsMargins(16, 8, 16, 8)
-        bl.setSpacing(8)
-
-        add_btn  = styled_btn("➕  Add User",        GREEN, GREEN_D, font_size=10)
-        edit_btn = styled_btn("✏️  Edit Selected",   BLUE,  BLUE_D,  font_size=10)
-        del_btn  = styled_btn("🗑  Delete Selected", RED,   RED_D,   font_size=10)
-        ref_btn  = styled_btn("🔄  Refresh",          GOLD,  GOLD_D,  DARK, 10)
-
-        add_btn.clicked.connect(self._add_user)
-        edit_btn.clicked.connect(self._edit_user)
-        del_btn.clicked.connect(self._delete_user)
-        ref_btn.clicked.connect(self._load)
-
-        for b in (add_btn, edit_btn, del_btn, ref_btn):
-            bl.addWidget(b)
-        bl.addStretch()
-
-        self._count_lbl = QLabel("")
-        self._count_lbl.setStyleSheet(
-            f"font-size: 12px; color: {GRAY}; background: transparent;"
-        )
-        bl.addWidget(self._count_lbl)
-        root.addWidget(bar)
-
-        # Table
-        body = QWidget()
-        body.setStyleSheet("background: transparent;")
-        bvl = QVBoxLayout(body)
-        bvl.setContentsMargins(16, 8, 16, 16)
-        bvl.setSpacing(8)
-
-        self._tbl = QTableWidget(0, 4)
-        self._tbl.setHorizontalHeaderLabels(["ID", "Username", "Role", "Created At"])
-        self._tbl.setStyleSheet(TABLE_STYLE)
-        self._tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self._tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self._tbl.setAlternatingRowColors(True)
-        self._tbl.verticalHeader().setVisible(False)
-        self._tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self._tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self._tbl.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self._tbl.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self._tbl.doubleClicked.connect(self._edit_user)
-        bvl.addWidget(self._tbl)
-
-        hint = QLabel("💡  Double-click a row to edit  •  The last admin account cannot be deleted")
-        hint.setStyleSheet(f"font-size: 11px; color: {GRAY}; background: transparent;")
-        hint.setAlignment(Qt.AlignCenter)
-        bvl.addWidget(hint)
-
-        close_btn = styled_btn("✖  Close", GOLD, GOLD_D, DARK)
-        close_btn.setFixedWidth(110)
-        close_btn.clicked.connect(self.accept)
-        row = QHBoxLayout()
-        row.addStretch()
-        row.addWidget(close_btn)
-        bvl.addLayout(row)
-
-        root.addWidget(body, stretch=1)
-
-    def _load(self):
-        self._tbl.setRowCount(0)
-        try:
-            db = get_db_connection()
-            cur = db.cursor(dictionary=True)
-            cur.execute("SELECT * FROM users ORDER BY id")
-            rows = cur.fetchall()
-            db.close()
-
-            self._tbl.setRowCount(len(rows))
-            for r, row in enumerate(rows):
-                id_item = QTableWidgetItem(str(row["id"]))
-                id_item.setTextAlignment(Qt.AlignCenter)
-                id_item.setData(Qt.UserRole, dict(row))
-                self._tbl.setItem(r, 0, id_item)
-
-                uname_item = QTableWidgetItem(row["username"])
-                if row["username"] == self.current_username:
-                    uname_item.setFont(QFont("Segoe UI", 12, QFont.Bold))
-                    uname_item.setForeground(QColor(BLUE))
-                self._tbl.setItem(r, 1, uname_item)
-
-                role_item = QTableWidgetItem(row["role"].capitalize())
-                role_item.setTextAlignment(Qt.AlignCenter)
-                if row["role"] == "admin":
-                    role_item.setForeground(QColor(RED))
-                    role_item.setFont(QFont("Segoe UI", 11, QFont.Bold))
-                self._tbl.setItem(r, 2, role_item)
-
-                self._tbl.setItem(r, 3, QTableWidgetItem(str(row.get("created_at", "—"))))
-
-            self._count_lbl.setText(f"{len(rows)} user(s)")
-        except Exception as err:
-            QMessageBox.critical(self, "Database Error", f"Could not load users:\n{err}")
-
-    def _get_selected_user(self):
-        row = self._tbl.currentRow()
-        if row < 0:
-            return None
-        id_item = self._tbl.item(row, 0)
-        return id_item.data(Qt.UserRole) if id_item else None
-
-    def _count_admins(self):
-        try:
-            db = get_db_connection()
-            cur = db.cursor()
-            cur.execute("SELECT COUNT(*) FROM users WHERE role='admin'")
-            cnt = cur.fetchone()[0]
-            db.close()
-            return cnt
-        except Exception:
-            return 99
-
-    def _add_user(self):
-        if AddUserDialog(self).exec_() == QDialog.Accepted:
-            self._load()
-
-    def _edit_user(self):
-        user = self._get_selected_user()
-        if not user:
-            QMessageBox.information(self, "No Selection", "Please select a user to edit.")
-            return
-        if EditUserDialog(user, self).exec_() == QDialog.Accepted:
-            self._load()
-
-    def _delete_user(self):
-        user = self._get_selected_user()
-        if not user:
-            QMessageBox.information(self, "No Selection", "Please select a user to delete.")
-            return
-
-        uname = user["username"]
-        if uname == self.current_username:
-            QMessageBox.warning(self, "Cannot Delete",
-                                "You cannot delete your own account while logged in.")
-            return
-
-        if user["role"] == "admin" and self._count_admins() <= 1:
-            QMessageBox.warning(self, "Cannot Delete",
-                                "Cannot delete the last admin account.\n"
-                                "Promote another user to admin first.")
-            return
-
-        reply = QMessageBox.question(
-            self, "⚠  Confirm Deletion",
-            f"Permanently delete user  '{uname}'?\n\nThis action cannot be undone.",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
-            return
-
-        try:
-            db = get_db_connection()
-            cur = db.cursor()
-            cur.execute("DELETE FROM users WHERE id = %s", (user["id"],))
-            db.commit()
-            db.close()
-            self._load()
-            QMessageBox.information(self, "Deleted", f"User '{uname}' has been deleted.")
-        except Exception as err:
-            QMessageBox.critical(self, "Database Error", f"Could not delete user:\n{err}")
-
-
-# ════════════════════════════════════════════════════════════════════════════
-#  DRAG SCROLL AREA  (unchanged)
-# ════════════════════════════════════════════════════════════════════════════
 class DragScrollArea(QScrollArea):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMouseTracking(True)
-        self._drag_active  = False
-        self._start_pos    = None
+        self._drag_active = False
+        self._start_pos = None
         self._start_scroll = None
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            self._drag_active  = True
-            self._start_pos    = event.pos()
+            self._drag_active = True
+            self._start_pos = event.pos()
             self._start_scroll = (
                 self.verticalScrollBar().value(),
                 self.horizontalScrollBar().value(),
@@ -1115,34 +208,973 @@ class DragScrollArea(QScrollArea):
 
     def mouseReleaseEvent(self, event):
         self._drag_active = False
-        self._start_pos   = None
+        self._start_pos = None
         super().mouseReleaseEvent(event)
 
 
-# ════════════════════════════════════════════════════════════════════════════
-#  REPORT PAGE
-# ════════════════════════════════════════════════════════════════════════════
+def drop_shadow(widget, blur=25, x=3, y=3, alpha=150):
+    fx = QGraphicsDropShadowEffect()
+    fx.setBlurRadius(blur)
+    fx.setXOffset(x)
+    fx.setYOffset(y)
+    fx.setColor(QColor(0, 0, 0, alpha))
+    widget.setGraphicsEffect(fx)
+    return fx
+
+
+def _dialog_header(layout, title: str, subtitle: str = ""):
+    """Dark/gold header bar used by all admin dialogs."""
+    hdr = QFrame()
+    hdr.setStyleSheet("background-color: #2b2b2b;")
+    hdr.setFixedHeight(60)
+    hl = QHBoxLayout(hdr)
+    hl.setContentsMargins(22, 0, 22, 0)
+    col = QVBoxLayout()
+    col.setSpacing(2)
+    t = QLabel(title)
+    t.setStyleSheet(
+        "font-size: 16px; font-weight: bold; color: #E8D28C; background: transparent;"
+    )
+    col.addWidget(t)
+    if subtitle:
+        s = QLabel(subtitle)
+        s.setStyleSheet("font-size: 11px; color: #888; background: transparent;")
+        col.addWidget(s)
+    hl.addLayout(col)
+    hl.addStretch()
+    layout.addWidget(hdr)
+    acc = QFrame()
+    acc.setFixedHeight(3)
+    acc.setStyleSheet("background-color: #E8D28C;")
+    layout.addWidget(acc)
+
+
+def _center_dialog(dlg):
+    """Center a dialog on its parent or the primary screen."""
+    dlg.adjustSize()
+    if dlg.parent():
+        pg = dlg.parent().frameGeometry()
+        dlg.move(
+            pg.x() + max(0, (pg.width()  - dlg.width())  // 2),
+            pg.y() + max(0, (pg.height() - dlg.height()) // 2),
+        )
+    else:
+        screen = QApplication.primaryScreen().availableGeometry()
+        dlg.move(
+            screen.x() + (screen.width()  - dlg.width())  // 2,
+            screen.y() + (screen.height() - dlg.height()) // 2,
+        )
+
+
+def _form_label(text: str) -> QLabel:
+    lbl = QLabel(text)
+    lbl.setStyleSheet(
+        "color: #555; font-size: 12px; font-weight: bold; background: transparent;"
+    )
+    return lbl
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ORDER DETAIL DIALOG
+# ─────────────────────────────────────────────────────────────────────────────
+
+class OrderDetailDialog(QDialog):
+    def __init__(self, order_id: int, order_total: float,
+                 order_date: str, parent=None):
+        super().__init__(parent)
+        self.order_id    = order_id
+        self.order_total = order_total
+        self.order_date  = order_date
+        self.setWindowTitle(f"Order #{order_id} – Detail")
+        self.setFixedSize(520, 540)
+        self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
+        self._build()
+        _center_dialog(self)
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        _dialog_header(root, f"📋  Order #{self.order_id}",
+                       subtitle=f"Date: {self.order_date}")
+
+        body = QWidget()
+        body.setStyleSheet("background: transparent;")
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(20, 16, 20, 16)
+        bl.setSpacing(12)
+        root.addWidget(body, stretch=1)
+
+        # Items table
+        tbl = QTableWidget()
+        tbl.setStyleSheet(TABLE_STYLE)
+        tbl.setColumnCount(4)
+        tbl.setHorizontalHeaderLabels(["Item", "Size", "Qty", "Price"])
+        tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        tbl.setColumnWidth(1, 90)
+        tbl.setColumnWidth(2, 55)
+        tbl.setColumnWidth(3, 100)
+        tbl.verticalHeader().setVisible(False)
+        tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
+        tbl.setAlternatingRowColors(True)
+        tbl.setShowGrid(False)
+
+        try:
+            db  = get_db_connection()
+            cur = db.cursor(dictionary=True)
+            cur.execute(
+                "SELECT product_name, size_name, quantity, item_price "
+                "FROM order_items WHERE order_id = %s",
+                (self.order_id,),
+            )
+            rows = cur.fetchall()
+            db.close()
+            tbl.setRowCount(len(rows))
+            for r, row in enumerate(rows):
+                tbl.setItem(r, 0, QTableWidgetItem(row["product_name"] or "—"))
+                size_item = QTableWidgetItem(row["size_name"] or "—")
+                size_item.setTextAlignment(Qt.AlignCenter)
+                tbl.setItem(r, 1, size_item)
+                qty_item = QTableWidgetItem(str(row["quantity"]))
+                qty_item.setTextAlignment(Qt.AlignCenter)
+                tbl.setItem(r, 2, qty_item)
+                price_item = QTableWidgetItem(f"₱{float(row['item_price']):,.2f}")
+                price_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                tbl.setItem(r, 3, price_item)
+        except Exception as err:
+            tbl.setRowCount(1)
+            tbl.setItem(0, 0, QTableWidgetItem(f"Error: {err}"))
+
+        bl.addWidget(tbl)
+
+        # Total card
+        tot_f = QFrame()
+        tot_f.setStyleSheet(
+            "QFrame { background-color: white; border-radius: 10px; border: 1px solid #c8b87a; }"
+        )
+        tot_l = QHBoxLayout(tot_f)
+        tot_l.setContentsMargins(18, 12, 18, 12)
+        lbl = QLabel("ORDER TOTAL")
+        lbl.setStyleSheet(
+            "font-size: 11px; font-weight: bold; color: #888; "
+            "letter-spacing: 1px; background: transparent; border: none;"
+        )
+        val = QLabel(f"₱{self.order_total:,.2f}")
+        val.setStyleSheet(
+            "font-size: 24px; font-weight: bold; color: #2b2b2b; "
+            "background: transparent; border: none;"
+        )
+        tot_l.addWidget(lbl)
+        tot_l.addStretch()
+        tot_l.addWidget(val)
+        bl.addWidget(tot_f)
+
+        close_btn = QPushButton("Close")
+        close_btn.setStyleSheet(ADMIN_BTN_STYLE)
+        close_btn.setFixedHeight(36)
+        close_btn.clicked.connect(self.accept)
+        bl.addWidget(close_btn, alignment=Qt.AlignRight)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ORDERS DIALOG
+# ─────────────────────────────────────────────────────────────────────────────
+
+class OrdersDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Order History")
+        self.resize(820, 560)
+        self.setMinimumSize(680, 440)
+        self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
+        self._build()
+        _center_dialog(self)
+        self._load()
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        _dialog_header(root, "📋  Order History",
+                       subtitle="Double-click a row to view its full breakdown")
+
+        body = QWidget()
+        body.setStyleSheet("background: transparent;")
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(16, 12, 16, 12)
+        bl.setSpacing(10)
+        root.addWidget(body, stretch=1)
+
+        # Toolbar
+        tb = QHBoxLayout()
+        self._count_lbl = QLabel("Loading…")
+        self._count_lbl.setStyleSheet(
+            "color: #888; font-size: 12px; background: transparent;"
+        )
+        tb.addWidget(self._count_lbl)
+        tb.addStretch()
+        refresh_btn = QPushButton("🔄  Refresh")
+        refresh_btn.setStyleSheet(ADMIN_BTN_STYLE)
+        refresh_btn.setFixedHeight(34)
+        refresh_btn.clicked.connect(self._load)
+        tb.addWidget(refresh_btn)
+        bl.addLayout(tb)
+
+        # Table
+        self._table = QTableWidget()
+        self._table.setStyleSheet(TABLE_STYLE)
+        self._table.setColumnCount(4)
+        self._table.setHorizontalHeaderLabels(
+            ["Order ID", "Date / Time", "# Items", "Total"]
+        )
+        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self._table.setColumnWidth(0, 90)
+        self._table.setColumnWidth(2, 80)
+        self._table.setColumnWidth(3, 130)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._table.setAlternatingRowColors(True)
+        self._table.setShowGrid(False)
+        self._table.doubleClicked.connect(self._view_detail)
+        bl.addWidget(self._table)
+
+        hint = QLabel("Double-click any row to view the full order breakdown.")
+        hint.setStyleSheet("color: #bbb; font-size: 11px; background: transparent;")
+        hint.setAlignment(Qt.AlignCenter)
+        bl.addWidget(hint)
+
+    def _load(self):
+        self._table.setRowCount(0)
+        self._count_lbl.setText("Loading…")
+        try:
+            db  = get_db_connection()
+            cur = db.cursor(dictionary=True)
+            cur.execute("""
+                SELECT o.id, o.total, o.created_at,
+                       COALESCE(COUNT(oi.id), 0) AS item_count
+                FROM orders o
+                LEFT JOIN order_items oi ON oi.order_id = o.id
+                GROUP BY o.id
+                ORDER BY o.id DESC
+                LIMIT 500
+            """)
+            rows = cur.fetchall()
+            db.close()
+        except Exception as err:
+            QMessageBox.critical(self, "Database Error", str(err))
+            self._count_lbl.setText("Error loading data.")
+            return
+
+        self._table.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            id_item = QTableWidgetItem(str(row["id"]))
+            id_item.setTextAlignment(Qt.AlignCenter)
+            self._table.setItem(r, 0, id_item)
+
+            self._table.setItem(r, 1, QTableWidgetItem(str(row["created_at"])))
+
+            cnt_item = QTableWidgetItem(str(row["item_count"] or 0))
+            cnt_item.setTextAlignment(Qt.AlignCenter)
+            self._table.setItem(r, 2, cnt_item)
+
+            total_item = QTableWidgetItem(f"₱{float(row['total']):,.2f}")
+            total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            self._table.setItem(r, 3, total_item)
+
+        self._count_lbl.setText(f"{len(rows)} record(s)")
+
+    def _view_detail(self, index):
+        r = index.row()
+        order_id  = int(self._table.item(r, 0).text())
+        order_date = self._table.item(r, 1).text()
+        total_str  = self._table.item(r, 3).text().replace("₱", "").replace(",", "")
+        try:
+            total = float(total_str)
+        except ValueError:
+            total = 0.0
+        dlg = OrderDetailDialog(order_id, total, order_date, parent=self)
+        dlg.exec_()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SUMMARY DIALOG
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SummaryDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Sales Summary")
+        self.setFixedSize(520, 510)
+        self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
+        self._build()
+        _center_dialog(self)
+        self._load()
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        _dialog_header(root, "📊  Sales Summary",
+                       subtitle="Today's performance at a glance")
+
+        body = QWidget()
+        body.setStyleSheet("background: transparent;")
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(24, 20, 24, 20)
+        bl.setSpacing(14)
+        root.addWidget(body, stretch=1)
+
+        # ── TODAY section ─────────────────────────────────────────────────
+        sec1 = QLabel("TODAY'S STATS")
+        sec1.setStyleSheet(
+            "font-size: 10px; font-weight: bold; color: #888; "
+            "letter-spacing: 2px; background: transparent;"
+        )
+        bl.addWidget(sec1)
+
+        today_configs = [
+            ("Total Orders Today", "#34699A", "_lbl_today_orders"),
+            ("Revenue Today",      "#1e7f3f", "_lbl_today_rev"),
+            ("Average Order Value","#e67e22", "_lbl_today_avg"),
+        ]
+        for label, color, attr in today_configs:
+            card = self._stat_card(label, color, "—", attr)
+            bl.addWidget(card)
+
+        # Divider
+        div = QFrame()
+        div.setFixedHeight(2)
+        div.setStyleSheet("background-color: #c8b87a; border: none;")
+        bl.addWidget(div)
+
+        # ── ALL-TIME section ──────────────────────────────────────────────
+        sec2 = QLabel("ALL-TIME TOTALS")
+        sec2.setStyleSheet(
+            "font-size: 10px; font-weight: bold; color: #888; "
+            "letter-spacing: 2px; background: transparent;"
+        )
+        bl.addWidget(sec2)
+
+        all_row = QHBoxLayout()
+        all_row.setSpacing(12)
+        for label, color, attr in [
+            ("Total Orders",  "#2b2b2b", "_lbl_all_orders"),
+            ("Total Revenue", "#E8D28C", "_lbl_all_rev"),
+        ]:
+            card = self._stat_card(label, color, "—", attr, horizontal=False)
+            all_row.addWidget(card)
+        bl.addLayout(all_row)
+
+        bl.addStretch()
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        ref = QPushButton("🔄  Refresh")
+        ref.setStyleSheet(BLUE_BTN_STYLE)
+        ref.setFixedHeight(36)
+        ref.clicked.connect(self._load)
+        btn_row.addWidget(ref)
+        close_btn = QPushButton("Close")
+        close_btn.setStyleSheet(ADMIN_BTN_STYLE)
+        close_btn.setFixedHeight(36)
+        close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(close_btn)
+        bl.addLayout(btn_row)
+
+    def _stat_card(self, label: str, color: str, initial: str,
+                   attr: str, horizontal: bool = True) -> QFrame:
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame { background-color: white; border-radius: 10px; "
+            "border: 1px solid #ede9dc; }"
+        )
+        drop_shadow(card, blur=12, alpha=50)
+
+        if horizontal:
+            cl = QHBoxLayout(card)
+            cl.setContentsMargins(14, 10, 14, 10)
+            accent = QFrame()
+            accent.setFixedWidth(5)
+            accent.setStyleSheet(
+                f"background-color: {color}; border-radius: 3px; border: none;"
+            )
+            cl.addWidget(accent)
+            info = QVBoxLayout()
+            info.setSpacing(2)
+            lbl = QLabel(label)
+            lbl.setStyleSheet(
+                "font-size: 11px; color: #888; background: transparent; border: none;"
+            )
+            val = QLabel(initial)
+            val.setStyleSheet(
+                f"font-size: 22px; font-weight: bold; color: {color}; "
+                "background: transparent; border: none;"
+            )
+            info.addWidget(lbl)
+            info.addWidget(val)
+            cl.addLayout(info)
+            cl.addStretch()
+        else:
+            cl = QVBoxLayout(card)
+            cl.setContentsMargins(16, 12, 16, 12)
+            lbl = QLabel(label)
+            lbl.setStyleSheet(
+                "font-size: 11px; color: #888; background: transparent; border: none;"
+            )
+            val = QLabel(initial)
+            val.setStyleSheet(
+                f"font-size: 20px; font-weight: bold; color: {color}; "
+                "background: transparent; border: none;"
+            )
+            cl.addWidget(lbl)
+            cl.addWidget(val)
+
+        setattr(self, attr, val)
+        return card
+
+    def _load(self):
+        today_orders, today_rev, today_avg = 0, 0.0, 0.0
+        all_orders,   all_rev              = 0, 0.0
+        try:
+            db  = get_db_connection()
+            cur = db.cursor(dictionary=True)
+            today_str = date.today().isoformat()
+
+            cur.execute(
+                "SELECT COUNT(*) AS cnt, COALESCE(SUM(total), 0) AS rev "
+                "FROM orders WHERE DATE(created_at) = %s",
+                (today_str,),
+            )
+            row = cur.fetchone()
+            today_orders = row["cnt"] or 0
+            today_rev    = float(row["rev"] or 0)
+            today_avg    = today_rev / today_orders if today_orders else 0.0
+
+            cur.execute(
+                "SELECT COUNT(*) AS cnt, COALESCE(SUM(total), 0) AS rev FROM orders"
+            )
+            row = cur.fetchone()
+            all_orders = row["cnt"] or 0
+            all_rev    = float(row["rev"] or 0)
+            db.close()
+        except Exception as err:
+            QMessageBox.warning(self, "Database Error", str(err))
+
+        self._lbl_today_orders.setText(str(today_orders))
+        self._lbl_today_rev.setText(f"₱{today_rev:,.2f}")
+        self._lbl_today_avg.setText(f"₱{today_avg:,.2f}")
+        self._lbl_all_orders.setText(str(all_orders))
+        self._lbl_all_rev.setText(f"₱{all_rev:,.2f}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADD USER DIALOG
+# ─────────────────────────────────────────────────────────────────────────────
+
+class AddUserDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.created = False
+        self.setWindowTitle("Add New User")
+        self.setFixedSize(420, 380)
+        self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
+        self._build()
+        _center_dialog(self)
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        _dialog_header(root, "➕  Add New User")
+
+        body = QWidget()
+        body.setStyleSheet("background: transparent;")
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(28, 20, 28, 20)
+        bl.setSpacing(10)
+        root.addWidget(body, stretch=1)
+
+        # Form grid
+        grid = QGridLayout()
+        grid.setSpacing(8)
+        grid.setColumnStretch(1, 1)
+
+        self._uname_edit = QLineEdit()
+        self._uname_edit.setPlaceholderText("at least 3 characters")
+        self._uname_edit.setStyleSheet(INPUT_STYLE)
+        self._uname_edit.setFixedHeight(36)
+
+        self._pwd_edit = QLineEdit()
+        self._pwd_edit.setPlaceholderText("password")
+        self._pwd_edit.setEchoMode(QLineEdit.Password)
+        self._pwd_edit.setStyleSheet(INPUT_STYLE)
+        self._pwd_edit.setFixedHeight(36)
+
+        self._role_combo = QComboBox()
+        self._role_combo.addItems(["cashier", "admin"])
+        self._role_combo.setStyleSheet(INPUT_STYLE)
+
+        for row_idx, (lbl_text, widget) in enumerate([
+            ("Username:",  self._uname_edit),
+            ("Password:",  self._pwd_edit),
+            ("Role:",      self._role_combo),
+        ]):
+            grid.addWidget(_form_label(lbl_text), row_idx, 0, Qt.AlignVCenter)
+            grid.addWidget(widget, row_idx, 1)
+
+        bl.addLayout(grid)
+
+        show_cb = QCheckBox("Show password")
+        show_cb.setStyleSheet(INPUT_STYLE)
+        show_cb.toggled.connect(
+            lambda on: self._pwd_edit.setEchoMode(
+                QLineEdit.Normal if on else QLineEdit.Password
+            )
+        )
+        bl.addWidget(show_cb)
+
+        self._status_lbl = QLabel("")
+        self._status_lbl.setStyleSheet(
+            "color: #c0392b; font-size: 12px; background: transparent;"
+        )
+        self._status_lbl.setWordWrap(True)
+        bl.addWidget(self._status_lbl)
+        bl.addStretch()
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        cancel = QPushButton("Cancel")
+        cancel.setStyleSheet(CANCEL_BTN_STYLE)
+        cancel.setFixedHeight(36)
+        cancel.clicked.connect(self.reject)
+        btn_row.addWidget(cancel)
+        create = QPushButton("➕  Create User")
+        create.setStyleSheet(GREEN_BTN_STYLE)
+        create.setFixedHeight(36)
+        create.clicked.connect(self._create)
+        btn_row.addWidget(create)
+        bl.addLayout(btn_row)
+
+    def _create(self):
+        uname = self._uname_edit.text().strip()
+        pwd   = self._pwd_edit.text()
+        role  = self._role_combo.currentText()
+
+        if len(uname) < 3:
+            self._status_lbl.setText("⚠  Username must be at least 3 characters.")
+            return
+        if not pwd:
+            self._status_lbl.setText("⚠  Password is required.")
+            return
+
+        try:
+            db  = get_db_connection()
+            cur = db.cursor(buffered=True)
+            cur.execute("SELECT id FROM users WHERE username = %s", (uname,))
+            if cur.fetchone():
+                self._status_lbl.setText(f"⚠  Username '{uname}' is already taken.")
+                db.close()
+                return
+            cur.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)",
+                (uname, hash_password(pwd), role),
+            )
+            db.commit()
+            db.close()
+            self.created = True
+            QMessageBox.information(
+                self, "User Created",
+                f"Account '{uname}' ({role}) was created successfully.",
+            )
+            self.accept()
+        except Exception as err:
+            self._status_lbl.setText(f"⚠  DB Error: {err}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RESET PASSWORD DIALOG
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ResetPasswordDialog(QDialog):
+    def __init__(self, user_id: int, username: str, parent=None):
+        super().__init__(parent)
+        self.user_id  = user_id
+        self.username = username
+        self.setWindowTitle("Reset Password")
+        self.setFixedSize(420, 320)
+        self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
+        self._build()
+        _center_dialog(self)
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        _dialog_header(root, "🔑  Reset Password",
+                       subtitle=f"Account: {self.username}")
+
+        body = QWidget()
+        body.setStyleSheet("background: transparent;")
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(28, 20, 28, 20)
+        bl.setSpacing(10)
+        root.addWidget(body, stretch=1)
+
+        grid = QGridLayout()
+        grid.setSpacing(8)
+        grid.setColumnStretch(1, 1)
+
+        self._new_pwd = QLineEdit()
+        self._new_pwd.setPlaceholderText("new password")
+        self._new_pwd.setEchoMode(QLineEdit.Password)
+        self._new_pwd.setStyleSheet(INPUT_STYLE)
+        self._new_pwd.setFixedHeight(36)
+
+        self._re_pwd = QLineEdit()
+        self._re_pwd.setPlaceholderText("confirm new password")
+        self._re_pwd.setEchoMode(QLineEdit.Password)
+        self._re_pwd.setStyleSheet(INPUT_STYLE)
+        self._re_pwd.setFixedHeight(36)
+
+        for row_idx, (lbl_text, widget) in enumerate([
+            ("New Password:", self._new_pwd),
+            ("Confirm:",      self._re_pwd),
+        ]):
+            grid.addWidget(_form_label(lbl_text), row_idx, 0, Qt.AlignVCenter)
+            grid.addWidget(widget, row_idx, 1)
+
+        bl.addLayout(grid)
+
+        show_cb = QCheckBox("Show password")
+        show_cb.setStyleSheet(INPUT_STYLE)
+        show_cb.toggled.connect(self._toggle_pw)
+        bl.addWidget(show_cb)
+
+        self._status_lbl = QLabel("")
+        self._status_lbl.setStyleSheet(
+            "color: #c0392b; font-size: 12px; background: transparent;"
+        )
+        self._status_lbl.setWordWrap(True)
+        bl.addWidget(self._status_lbl)
+        bl.addStretch()
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        cancel = QPushButton("Cancel")
+        cancel.setStyleSheet(CANCEL_BTN_STYLE)
+        cancel.setFixedHeight(36)
+        cancel.clicked.connect(self.reject)
+        btn_row.addWidget(cancel)
+        confirm = QPushButton("✓  Update Password")
+        confirm.setStyleSheet(GREEN_BTN_STYLE)
+        confirm.setFixedHeight(36)
+        confirm.clicked.connect(self._confirm)
+        btn_row.addWidget(confirm)
+        bl.addLayout(btn_row)
+
+    def _toggle_pw(self, on: bool):
+        mode = QLineEdit.Normal if on else QLineEdit.Password
+        self._new_pwd.setEchoMode(mode)
+        self._re_pwd.setEchoMode(mode)
+
+    def _confirm(self):
+        p1 = self._new_pwd.text()
+        p2 = self._re_pwd.text()
+        if not p1:
+            self._status_lbl.setText("⚠  Please enter a new password.")
+            return
+        if p1 != p2:
+            self._status_lbl.setText("⚠  Passwords do not match.")
+            return
+        try:
+            db  = get_db_connection()
+            cur = db.cursor()
+            cur.execute(
+                "UPDATE users SET password_hash = %s WHERE id = %s",
+                (hash_password(p1), self.user_id),
+            )
+            db.commit()
+            db.close()
+            QMessageBox.information(
+                self, "Password Updated",
+                f"Password for '{self.username}' was updated successfully.",
+            )
+            self.accept()
+        except Exception as err:
+            self._status_lbl.setText(f"⚠  DB Error: {err}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# USERS DIALOG
+# ─────────────────────────────────────────────────────────────────────────────
+
+class UsersDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Manage Users")
+        self.resize(780, 520)
+        self.setMinimumSize(680, 420)
+        self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
+        self._build()
+        _center_dialog(self)
+        self._load()
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        _dialog_header(root, "👤  Manage Users",
+                       subtitle="Add, reset passwords, change roles, or delete accounts")
+
+        body = QWidget()
+        body.setStyleSheet("background: transparent;")
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(16, 12, 16, 12)
+        bl.setSpacing(10)
+        root.addWidget(body, stretch=1)
+
+        # Toolbar
+        tb = QHBoxLayout()
+        tb.setSpacing(8)
+
+        add_btn = QPushButton("➕  Add User")
+        add_btn.setStyleSheet(GREEN_BTN_STYLE)
+        add_btn.setFixedHeight(34)
+        add_btn.clicked.connect(self._add_user)
+        tb.addWidget(add_btn)
+
+        self._reset_btn = QPushButton("🔑  Reset Password")
+        self._reset_btn.setStyleSheet(BLUE_BTN_STYLE)
+        self._reset_btn.setFixedHeight(34)
+        self._reset_btn.clicked.connect(self._reset_password)
+        tb.addWidget(self._reset_btn)
+
+        self._role_btn = QPushButton("⚙  Change Role")
+        self._role_btn.setStyleSheet(AMBER_BTN_STYLE)
+        self._role_btn.setFixedHeight(34)
+        self._role_btn.clicked.connect(self._change_role)
+        tb.addWidget(self._role_btn)
+
+        self._del_btn = QPushButton("🗑  Delete User")
+        self._del_btn.setStyleSheet(DANGER_BTN_STYLE)
+        self._del_btn.setFixedHeight(34)
+        self._del_btn.clicked.connect(self._delete_user)
+        tb.addWidget(self._del_btn)
+
+        tb.addStretch()
+
+        refresh_btn = QPushButton("🔄  Refresh")
+        refresh_btn.setStyleSheet(ADMIN_BTN_STYLE)
+        refresh_btn.setFixedHeight(34)
+        refresh_btn.clicked.connect(self._load)
+        tb.addWidget(refresh_btn)
+
+        bl.addLayout(tb)
+
+        # Table
+        self._table = QTableWidget()
+        self._table.setStyleSheet(TABLE_STYLE)
+        self._table.setColumnCount(4)
+        self._table.setHorizontalHeaderLabels(
+            ["ID", "Username", "Role", "Created"]
+        )
+        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self._table.setColumnWidth(0, 55)
+        self._table.setColumnWidth(2, 90)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._table.setAlternatingRowColors(True)
+        self._table.setShowGrid(False)
+        bl.addWidget(self._table)
+
+        self._status_lbl = QLabel("")
+        self._status_lbl.setStyleSheet(
+            "color: #888; font-size: 11px; background: transparent;"
+        )
+        bl.addWidget(self._status_lbl)
+
+    def _load(self):
+        self._table.setRowCount(0)
+        try:
+            db  = get_db_connection()
+            cur = db.cursor(dictionary=True)
+            cur.execute(
+                "SELECT id, username, role, created_at FROM users ORDER BY id"
+            )
+            rows = cur.fetchall()
+            db.close()
+        except Exception as err:
+            QMessageBox.critical(self, "Database Error", str(err))
+            return
+
+        self._table.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            id_item = QTableWidgetItem(str(row["id"]))
+            id_item.setTextAlignment(Qt.AlignCenter)
+            self._table.setItem(r, 0, id_item)
+
+            self._table.setItem(r, 1, QTableWidgetItem(row["username"]))
+
+            role_text = row["role"].title()
+            role_item = QTableWidgetItem(role_text)
+            role_item.setTextAlignment(Qt.AlignCenter)
+            role_item.setForeground(
+                QColor("#e67e22") if row["role"] == "admin" else QColor("#34699A")
+            )
+            self._table.setItem(r, 2, role_item)
+
+            created = str(row["created_at"]) if row["created_at"] else "—"
+            self._table.setItem(r, 3, QTableWidgetItem(created))
+
+        self._status_lbl.setText(f"{len(rows)} user(s)  —  Select a row to act on it")
+
+    def _selected(self):
+        """Return (uid, username, role) for the selected row, or None on no selection."""
+        row = self._table.currentRow()
+        if row < 0 or not self._table.item(row, 0):
+            QMessageBox.information(self, "No Selection", "Please select a user first.")
+            return None
+        uid   = int(self._table.item(row, 0).text())
+        uname = self._table.item(row, 1).text()
+        role  = self._table.item(row, 2).text().lower()
+        return uid, uname, role
+
+    def _count_admins(self) -> int:
+        try:
+            db  = get_db_connection()
+            cur = db.cursor()
+            cur.execute("SELECT COUNT(*) FROM users WHERE role = 'admin'")
+            count = cur.fetchone()[0]
+            db.close()
+            return count
+        except Exception:
+            return 2   # safe fallback — assume more than one
+
+    def _add_user(self):
+        dlg = AddUserDialog(parent=self)
+        dlg.exec_()
+        if dlg.created:
+            self._load()
+
+    def _reset_password(self):
+        sel = self._selected()
+        if sel is None:
+            return
+        uid, uname, _ = sel
+        dlg = ResetPasswordDialog(uid, uname, parent=self)
+        dlg.exec_()
+
+    def _change_role(self):
+        sel = self._selected()
+        if sel is None:
+            return
+        uid, uname, current_role = sel
+        new_role = "admin" if current_role == "cashier" else "cashier"
+
+        if current_role == "admin" and self._count_admins() <= 1:
+            QMessageBox.warning(
+                self, "Cannot Change Role",
+                "Cannot demote the last admin account.\n"
+                "Promote another user to admin first.",
+            )
+            return
+
+        reply = QMessageBox.question(
+            self, "Change Role",
+            f"Change '{uname}' from {current_role} → {new_role}?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            db  = get_db_connection()
+            cur = db.cursor()
+            cur.execute(
+                "UPDATE users SET role = %s WHERE id = %s", (new_role, uid)
+            )
+            db.commit()
+            db.close()
+            QMessageBox.information(
+                self, "Role Updated",
+                f"'{uname}' is now a {new_role}.",
+            )
+            self._load()
+        except Exception as err:
+            QMessageBox.critical(self, "Database Error", str(err))
+
+    def _delete_user(self):
+        sel = self._selected()
+        if sel is None:
+            return
+        uid, uname, role = sel
+
+        if role == "admin" and self._count_admins() <= 1:
+            QMessageBox.warning(
+                self, "Cannot Delete",
+                "Cannot delete the last admin account.",
+            )
+            return
+
+        reply = QMessageBox.question(
+            self, "⚠  Confirm Deletion",
+            f"Permanently delete user '{uname}'?\n\nThis cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            db  = get_db_connection()
+            cur = db.cursor()
+            cur.execute("DELETE FROM users WHERE id = %s", (uid,))
+            db.commit()
+            db.close()
+            QMessageBox.information(self, "Deleted", f"User '{uname}' has been deleted.")
+            self._load()
+        except Exception as err:
+            QMessageBox.critical(self, "Database Error", str(err))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REPORT PAGE
+# ─────────────────────────────────────────────────────────────────────────────
+
 class ReportPage(QWidget):
-    def __init__(self, switch_callback=None, role="cashier", username=""):
+    def __init__(self, switch_callback=None, role: str = "cashier"):
         super().__init__()
         self.switch_callback = switch_callback
-        self.role            = role
-        self.username        = username
-        self.sales_data      = {}
-        self.daily_sales     = {}
+        self.role        = role
+        self.sales_data  = {}
+        self.daily_sales = {}
 
         self.setWindowTitle("Hyped Mangoes — Reports")
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         self._build_ui()
         self._load_from_db()
         self.refresh_report()
 
-    # ── DB load ──────────────────────────────────────────────────────────────
+    # ── DB LOAD ──────────────────────────────────────────────────────────────
+
     def _load_from_db(self):
         """Load all past orders from DB to pre-populate charts."""
         try:
-            db = get_db_connection()
+            db  = get_db_connection()
             cur = db.cursor(dictionary=True)
 
             cur.execute("""
@@ -1170,7 +1202,8 @@ class ReportPage(QWidget):
         except Exception as err:
             print(f"[Report] Could not load history from DB: {err}")
 
-    # ── UI build ─────────────────────────────────────────────────────────────
+    # ── UI BUILD ─────────────────────────────────────────────────────────────
+
     def _build_ui(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -1194,7 +1227,6 @@ class ReportPage(QWidget):
 
         nav_layout = QHBoxLayout()
         nav_layout.setSpacing(8)
-
         for label, icon_path, page_key in [
             ("  TRANSACTIONS", "TRANSACTION.png", "pos"),
             ("  INVENTORY",    "inventory.png",   "inventory"),
@@ -1206,7 +1238,8 @@ class ReportPage(QWidget):
             btn.setStyleSheet(NAV_BTN_STYLE)
             _k = page_key
             btn.clicked.connect(
-                lambda checked, k=_k: self.switch_callback(k) if self.switch_callback else None
+                lambda checked, k=_k:
+                    self.switch_callback(k) if self.switch_callback else None
             )
             drop_shadow(btn, blur=18, alpha=100)
             nav_layout.addWidget(btn)
@@ -1217,83 +1250,14 @@ class ReportPage(QWidget):
         tbl.addStretch()
         root.addWidget(top_bar)
 
-        # ── GOLD SEPARATOR ───────────────────────────────────────────────────
+        # Gold separator under top bar
         sep = QFrame()
         sep.setFixedHeight(2)
         sep.setStyleSheet("background-color: #c8b87a;")
         root.addWidget(sep)
 
-        # ── ADMIN SUB-BAR  (admin only) ──────────────────────────────────────
-        if self.role == "admin":
-            admin_bar = QFrame()
-            admin_bar.setFixedHeight(56)
-            admin_bar.setStyleSheet(f"""
-                QFrame {{
-                    background-color: {SUBBG};
-                    border-bottom: 1px solid {BORDER};
-                }}
-            """)
-            abl = QHBoxLayout(admin_bar)
-            abl.setContentsMargins(22, 0, 22, 0)
-            abl.setSpacing(12)
-
-            # "ADMIN" tag
-            tag = QLabel("⚙  ADMIN")
-            tag.setStyleSheet(
-                f"font-size: 10px; font-weight: bold; color: {GRAY}; "
-                "letter-spacing: 2px; background: transparent;"
-            )
-            abl.addWidget(tag)
-
-            # Vertical divider
-            vdiv = QFrame()
-            vdiv.setFrameShape(QFrame.VLine)
-            vdiv.setFixedHeight(28)
-            vdiv.setStyleSheet(f"background: {BORDER}; border: none; max-width: 1px;")
-            abl.addWidget(vdiv)
-
-            # Action buttons
-            btn_specs = [
-                ("📋  Orders",   BLUE,  BLUE_D,  self._open_orders),
-                ("📊  Summary",  GREEN, GREEN_D, self._open_summary),
-                ("👤  Users",    RED,   RED_D,   self._open_users),
-            ]
-            for label, bg, hover, callback in btn_specs:
-                b = QPushButton(label)
-                b.setCursor(Qt.PointingHandCursor)
-                b.setFont(QFont("Segoe UI", 11, QFont.Bold))
-                b.setFixedHeight(36)
-                b.setMinimumWidth(120)
-                b.setStyleSheet(f"""
-                    QPushButton {{
-                        background-color: {bg};
-                        color: white;
-                        border: none;
-                        border-radius: 8px;
-                        padding: 0 18px;
-                    }}
-                    QPushButton:hover  {{ background-color: {hover}; }}
-                    QPushButton:pressed {{ background-color: {hover}; }}
-                """)
-                b.clicked.connect(callback)
-                drop_shadow(b, blur=12, alpha=70)
-                abl.addWidget(b)
-
-            abl.addStretch()
-
-            # User badge (right side)
-            if self.username:
-                badge = QLabel(f"  👤 {self.username}  ·  Admin  ")
-                badge.setStyleSheet(f"""
-                    font-size: 11px; font-weight: bold;
-                    color: {DARK};
-                    background: {GOLD};
-                    border-radius: 10px;
-                    padding: 4px 12px;
-                """)
-                abl.addWidget(badge)
-
-            root.addWidget(admin_bar)
+        # ── ADMIN BUTTON BAR ─────────────────────────────────────────────────
+        self._build_admin_bar(root)
 
         # ── CONTENT SCROLL ───────────────────────────────────────────────────
         scroll_area = DragScrollArea()
@@ -1329,7 +1293,8 @@ class ReportPage(QWidget):
         left_col = QVBoxLayout()
         card_title = QLabel("TOTAL REVENUE")
         card_title.setStyleSheet(
-            "font-size: 11px; font-weight: bold; color: #888; letter-spacing: 2px; background: transparent;"
+            "font-size: 11px; font-weight: bold; color: #888; "
+            "letter-spacing: 2px; background: transparent;"
         )
         self.total_value = QLabel("₱0.00")
         self.total_value.setStyleSheet(
@@ -1419,23 +1384,81 @@ class ReportPage(QWidget):
         content_grid.setColumnStretch(0, 1)
         content_grid.setColumnStretch(1, 1)
 
-    # ── Panel factory ─────────────────────────────────────────────────────────
+    # ── ADMIN BAR ────────────────────────────────────────────────────────────
+
+    def _build_admin_bar(self, root: QVBoxLayout):
+        bar = QFrame()
+        bar.setFixedHeight(52)
+        bar.setStyleSheet("background-color: #2b2b2b;")
+        bl = QHBoxLayout(bar)
+        bl.setContentsMargins(20, 0, 20, 0)
+        bl.setSpacing(10)
+
+        # Always-visible buttons
+        for label, slot in [
+            ("📋  Orders",         self._open_orders),
+            ("📊  Today's Summary", self._open_summary),
+        ]:
+            btn = QPushButton(label)
+            btn.setFixedHeight(36)
+            btn.setStyleSheet(ADMIN_BTN_STYLE)
+            btn.setCursor(Qt.PointingHandCursor)
+            drop_shadow(btn, blur=10, alpha=55)
+            btn.clicked.connect(slot)
+            bl.addWidget(btn)
+
+        # Admin-only: Manage Users
+        if self.role == "admin":
+            usr_btn = QPushButton("👤  Manage Users")
+            usr_btn.setFixedHeight(36)
+            usr_btn.setStyleSheet(ADMIN_BTN_STYLE)
+            usr_btn.setCursor(Qt.PointingHandCursor)
+            drop_shadow(usr_btn, blur=10, alpha=55)
+            usr_btn.clicked.connect(self._open_users)
+            bl.addWidget(usr_btn)
+
+        bl.addStretch()
+
+        # Refresh stays on the right
+        ref_btn = QPushButton("🔄  Refresh")
+        ref_btn.setFixedHeight(36)
+        ref_btn.setStyleSheet(ADMIN_BTN_STYLE)
+        ref_btn.setCursor(Qt.PointingHandCursor)
+        drop_shadow(ref_btn, blur=10, alpha=55)
+        ref_btn.clicked.connect(self.refresh_report)
+        bl.addWidget(ref_btn)
+
+        root.addWidget(bar)
+
+        # Thin gold accent under the admin bar
+        acc = QFrame()
+        acc.setFixedHeight(2)
+        acc.setStyleSheet("background-color: #E8D28C;")
+        root.addWidget(acc)
+
+    # ── BUTTON HANDLERS ──────────────────────────────────────────────────────
+
+    def _open_orders(self):
+        dlg = OrdersDialog(parent=self)
+        dlg.exec_()
+
+    def _open_summary(self):
+        dlg = SummaryDialog(parent=self)
+        dlg.exec_()
+
+    def _open_users(self):
+        dlg = UsersDialog(parent=self)
+        dlg.exec_()
+
+    # ── PANEL FACTORY ────────────────────────────────────────────────────────
+
     def _make_panel(self):
         panel = QFrame()
         panel.setStyleSheet("QFrame { background-color: white; border-radius: 14px; }")
         return panel
 
-    # ── Admin button handlers ─────────────────────────────────────────────────
-    def _open_orders(self):
-        OrdersDialog(self).exec_()
+    # ── DATA UPDATES (called by IMS on complete_order) ────────────────────────
 
-    def _open_summary(self):
-        SummaryDialog(self).exec_()
-
-    def _open_users(self):
-        UsersDialog(current_username=self.username, parent=self).exec_()
-
-    # ── Data updates (called by IMS on complete_order) ────────────────────────
     def update_sales(self, items, total):
         """items = list of (product_name, price). Called live from IMS."""
         if not items:
@@ -1451,7 +1474,8 @@ class ReportPage(QWidget):
         self.plot_bar()
         self.update_tracker()
 
-    # ── Tracker ───────────────────────────────────────────────────────────────
+    # ── TRACKER ──────────────────────────────────────────────────────────────
+
     def update_tracker(self):
         for i in reversed(range(self.tracker_layout.count())):
             w = self.tracker_layout.itemAt(i).widget()
@@ -1474,7 +1498,8 @@ class ReportPage(QWidget):
             percent = (value / total_sales) * 100
             row = QFrame()
             row.setStyleSheet(
-                "QFrame { background-color: #fafaf7; border-radius: 8px; border: 1px solid #ede9dc; }"
+                "QFrame { background-color: #fafaf7; border-radius: 8px; "
+                "border: 1px solid #ede9dc; }"
             )
             row_layout = QHBoxLayout(row)
             row_layout.setContentsMargins(12, 8, 12, 8)
@@ -1487,7 +1512,9 @@ class ReportPage(QWidget):
             color_dot.setFixedWidth(22)
 
             name_lbl = QLabel(item)
-            name_lbl.setStyleSheet("font-size: 13px; color: #2c3e50; background: transparent;")
+            name_lbl.setStyleSheet(
+                "font-size: 13px; color: #2c3e50; background: transparent;"
+            )
             name_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
             val_lbl = QLabel(f"₱{value:,.2f}")
@@ -1507,7 +1534,8 @@ class ReportPage(QWidget):
             row_layout.addWidget(pct_lbl)
             self.tracker_layout.addWidget(row)
 
-    # ── Charts ────────────────────────────────────────────────────────────────
+    # ── CHARTS ───────────────────────────────────────────────────────────────
+
     def plot_pie(self):
         fig = self.pie_canvas.figure
         fig.clear()
@@ -1565,8 +1593,9 @@ class ReportPage(QWidget):
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
                 bar.get_height() + max(values) * 0.02,
-                f"₱{val:,.0f}", ha="center", va="bottom",
-                fontsize=9, color="#2b2b2b", fontweight="bold",
+                f"₱{val:,.0f}",
+                ha="center", va="bottom", fontsize=9,
+                color="#2b2b2b", fontweight="bold",
             )
 
         ax.set_xticks(x_pos)
@@ -1585,6 +1614,6 @@ class ReportPage(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = ReportPage(role="admin", username="admin")
+    window = ReportPage(role="admin")
     window.show()
     sys.exit(app.exec_())

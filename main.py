@@ -23,7 +23,7 @@ def build_app(role):
     pages = {}
     switch = switch_page_factory(stack, pages)
 
-    pages["report"]      = ReportPage(switch_callback=switch)
+    pages["report"]      = ReportPage(switch_callback=switch, role=role)
     pages["inventory"]   = InventoryPage(switch_callback=switch)
     pages["ingredients"] = IngredientsPage(switch_callback=switch)
     pages["pos"]         = IMS(
