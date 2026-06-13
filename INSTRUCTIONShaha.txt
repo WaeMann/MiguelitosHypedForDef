@@ -6,7 +6,7 @@ Just kiddin', tell everyone what you think. We'll do what we can to fix it.
 
 INSTRUCTIONS
 
-Share or download from github: https://github.com/WaeMann/MiguelitosHypedForDef.git
+Share or download from github repository: https://github.com/WaeMann/MiguelitosHypedForDef.git
 
 1. Create/add local python interpreter on your IDE.
 settings > python > interpreter > add/create local interpreter
@@ -19,7 +19,7 @@ pip install pyqt5
 pip install matplotlib
 pip install mysql-connector-python (change the connector if you're not using MySQL)
 
-3. For database execute setup_database(.)sql then seed_products(.)sql
+3. For database, execute setup_database(.)sql then seed_products(.)sql
 Also, change the db.py connector depending on the server where you've set up the executed file/database.
 This shyt
         host="127.0.0.1",
@@ -35,6 +35,7 @@ Does not work when switching windows blah blah blah Because main.py connects the
 
 DevNuts
 
+!-urgent
 *Pending
 **-Fixed/Ignored
 ***-New
@@ -45,22 +46,25 @@ DevNuts
 ** Fix buttons,label, and text functions in inventory.
 ** Improve REPORT layout and buttons
 * App is not an executable file yet. Would change if needed
-* Add admin/cashier in POS
+** Add admin/cashier in POS
 ** Add security/login window
 ** Add Database
 ** Remove/keep Login button in inventory window
 ** Add ingredients in inventory.
 ** FOR THE DATABASE- I've created constant/sample items inside script.py. Remove them from the file then place inside the database you've created.
 ** Fix the dang database >:(
-*** Separate admin account and cashier account (restrict cashiers from some actions e.g. browse files, add/delete/edit inventory items, daily reports, etc.)
+** Separate admin account and cashier account (restrict cashiers from some actions e.g. browse files, add/delete/edit inventory items, daily reports, etc.)
 ** Add option to add images to items in inventory
 ** Add ingredients window
-*** Fix logout. Should go back to login instead of closing itself
+** Fix logout. Should go back to login instead of closing itself
 ** Add new window. Ingredients manager
-*** Add automatic change calculator
+** Add automatic change calculator
 * Add confirmation after clicking "COMPLETE ORDER".
-*** (for report) ---- {create dropdown for each} Current: Total revenue (needs weekly), Sales breakdown by item (needs to be divided to daily, weekly), Item sales breakdown (needs to be divided to daily, weekly), Daily sales.
-*** Add daily reset/shift for report. (e.g. Start time=07:00 End time=21:00)
+* (for report) ---- {create dropdown for each} Current: Total revenue (needs weekly), Sales breakdown by item (needs to be divided to daily, weekly), Item sales breakdown (needs to be divided to daily, weekly), Daily sales.
+* Add daily reset/shift for report. (e.g. Start time=07:00 End time=21:00)
 *** Add ice to ingredients
-*** Fix PoS not refreshing after every orders, add, edit, delete, etc.
-*** Fix database error in inventory.py. Items not deleting because of foreign key bullsht.
+*! Fix PoS not refreshing after every orders, add, edit, delete, etc.
+** Fix database error in inventory.py. Items not deleting because of foreign key bullsht.
+***Add Login Tracker (Copy from FasterFood)
+***Add Receipts (Copy from FasterFood)
+***Make Login Fullscreen with no border
