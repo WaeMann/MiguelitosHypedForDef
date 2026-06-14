@@ -1031,7 +1031,8 @@ class UsersDialog(QDialog):
             db  = get_db_connection()
             cur = db.cursor(dictionary=True)
             cur.execute(
-                "SELECT id, username, role, created_at FROM users ORDER BY id"
+                "SELECT id, username, role, created_at, "
+                "failed_attempts, locked_until FROM users ORDER BY id"
             )
             rows = cur.fetchall()
             db.close()
@@ -1179,6 +1180,38 @@ class UsersDialog(QDialog):
             db.commit()
             db.close()
             QMessageBox.information(self, "Deleted", f"User '{uname}' has been deleted.")
+            self._load()
+        except Exception as err:
+            QMessageBox.critical(self, "Database Error", str(err))
+
+    def _unlock_user(self):
+        sel = self._selected()
+        if sel is None:
+            return
+        uid, uname, _ = sel
+
+        reply = QMessageBox.question(
+            self, "Unlock User",
+            f"Unlock account '{uname}' and reset failed attempts?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            db  = get_db_connection()
+            cur = db.cursor()
+            cur.execute(
+                "UPDATE users SET failed_attempts = 0, locked_until = 0 "
+                "WHERE id = %s",
+                (uid,),
+            )
+            db.commit()
+            db.close()
+            QMessageBox.information(
+                self, "Unlocked",
+                f"Account '{uname}' has been unlocked successfully.",
+            )
             self._load()
         except Exception as err:
             QMessageBox.critical(self, "Database Error", str(err))
