@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QPushButton, QFrame, QGridLayout, QGraphicsDropShadowEffect,
     QSizePolicy, QScrollArea, QDialog, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QLineEdit, QComboBox,
-    QCheckBox, QAbstractItemView
+    QCheckBox, QAbstractItemView, QTextEdit
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QIcon, QColor
@@ -280,19 +280,35 @@ def _form_label(text: str) -> QLabel:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ORDER DETAIL DIALOG
+# RECEIPT DIALOG  (replaces OrderDetailDialog)
 # ─────────────────────────────────────────────────────────────────────────────
 
-class OrderDetailDialog(QDialog):
+STORE_INFO = {
+    "name":    "MIGUELITO'S",
+    "branch":  "Ayala Malls Marikina Branch",
+    "address": "Liwasang Kalayaan, Marikina, 1800 Metro Manila",
+    "tel":     "(02) 8-MANGO-01",
+    "tin":     "123-456-789-000",
+}
+
+class ReceiptDialog(QDialog):
+    """Thermal-style receipt viewer for a past order."""
+
     def __init__(self, order_id: int, order_total: float,
                  order_date: str, parent=None):
         super().__init__(parent)
         self.order_id    = order_id
         self.order_total = order_total
         self.order_date  = order_date
-        self.setWindowTitle(f"Order #{order_id} – Detail")
-        self.setFixedSize(520, 540)
-        self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
+
+        self.setWindowTitle(f"Receipt – Order #{order_id}")
+        self.setFixedSize(480, 640)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #EFE9D1;
+                font-family: 'Segoe UI';
+            }
+        """)
         self._build()
         _center_dialog(self)
 
@@ -301,30 +317,106 @@ class OrderDetailDialog(QDialog):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        _dialog_header(root, f"📋  Order #{self.order_id}",
-                       subtitle=f"Date: {self.order_date}")
+        # ── Header bar ──────────────────────────────────────────────────────
+        hdr = QFrame()
+        hdr.setFixedHeight(52)
+        hdr.setStyleSheet("background-color: #2b2b2b;")
+        hl = QHBoxLayout(hdr)
+        hl.setContentsMargins(16, 0, 16, 0)
+        title_lbl = QLabel(f"🧾  Receipt – Order #{self.order_id}")
+        title_lbl.setStyleSheet(
+            "font-size: 15px; font-weight: bold; color: #E8D28C; background: transparent;"
+        )
+        hl.addWidget(title_lbl)
+        hl.addStretch()
+        root.addWidget(hdr)
 
-        body = QWidget()
-        body.setStyleSheet("background: transparent;")
-        bl = QVBoxLayout(body)
-        bl.setContentsMargins(20, 16, 20, 16)
-        bl.setSpacing(12)
-        root.addWidget(body, stretch=1)
+        # Gold accent line
+        acc = QFrame()
+        acc.setFixedHeight(3)
+        acc.setStyleSheet("background-color: #E8D28C;")
+        root.addWidget(acc)
 
-        # Items table
-        tbl = QTableWidget()
-        tbl.setStyleSheet(TABLE_STYLE)
-        tbl.setColumnCount(4)
-        tbl.setHorizontalHeaderLabels(["Item", "Size", "Qty", "Price"])
-        tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        tbl.setColumnWidth(1, 90)
-        tbl.setColumnWidth(2, 55)
-        tbl.setColumnWidth(3, 100)
-        tbl.verticalHeader().setVisible(False)
-        tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
-        tbl.setAlternatingRowColors(True)
-        tbl.setShowGrid(False)
+        # ── Scrollable receipt body ─────────────────────────────────────────
+        from PyQt5.QtWidgets import QTextEdit
+        self._txt = QTextEdit()
+        self._txt.setReadOnly(True)
+        self._txt.setStyleSheet("""
+            QTextEdit {
+                background-color: #FFFDF5;
+                border: none;
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+                color: #1a1a1a;
+                padding: 12px 18px;
+            }
+        """)
+        root.addWidget(self._txt, stretch=1)
+
+        self._render_receipt()
+
+        # ── Footer buttons ──────────────────────────────────────────────────
+        foot = QFrame()
+        foot.setFixedHeight(52)
+        foot.setStyleSheet("background-color: #f0ead8; border-top: 1px solid #c8b87a;")
+        fl = QHBoxLayout(foot)
+        fl.setContentsMargins(16, 0, 16, 0)
+        fl.setSpacing(10)
+
+        print_btn = QPushButton("🖨  Print / Save")
+        print_btn.setStyleSheet(BLUE_BTN_STYLE)
+        print_btn.setFixedHeight(34)
+        print_btn.clicked.connect(self._on_print)
+        fl.addWidget(print_btn)
+
+        fl.addStretch()
+
+        close_btn = QPushButton("Close")
+        close_btn.setStyleSheet(ADMIN_BTN_STYLE)
+        close_btn.setFixedHeight(34)
+        close_btn.clicked.connect(self.accept)
+        fl.addWidget(close_btn)
+
+        root.addWidget(foot)
+
+    def _render_receipt(self):
+        """Build the monospace receipt text and push it into the QTextEdit."""
+        W = 46  # receipt width in chars
+
+        def ln(text="", align="l"):
+            if align == "c":
+                return text.center(W)
+            if align == "r":
+                return text.rjust(W)
+            return text
+
+        def div(ch="─"):
+            return ch * W
+
+        def two_col(left, right):
+            gap = max(1, W - len(left) - len(right))
+            return left + " " * gap + right
+
+        lines = []
+
+        # Header
+        lines.append(div("═"))
+        lines.append(ln(STORE_INFO["name"], "c"))
+        lines.append(ln(STORE_INFO["branch"], "c"))
+        lines.append(ln(STORE_INFO["address"], "c"))
+        lines.append(ln(f"Tel: {STORE_INFO['tel']}", "c"))
+        lines.append(ln(f"TIN: {STORE_INFO['tin']}", "c"))
+        lines.append(div("═"))
+        lines.append("")
+
+        lines.append(two_col("Order  :", f"#{self.order_id}"))
+        lines.append(two_col("Date   :", str(self.order_date)))
+        lines.append("")
+
+        # Items
+        lines.append(div())
+        lines.append(f"{'ITEM':<22} {'SIZE':>6} {'QTY':>3} {'TOTAL':>11}")
+        lines.append(div())
 
         try:
             db  = get_db_connection()
@@ -334,53 +426,49 @@ class OrderDetailDialog(QDialog):
                 "FROM order_items WHERE order_id = %s",
                 (self.order_id,),
             )
-            rows = cur.fetchall()
+            items = cur.fetchall()
             db.close()
-            tbl.setRowCount(len(rows))
-            for r, row in enumerate(rows):
-                tbl.setItem(r, 0, QTableWidgetItem(row["product_name"] or "—"))
-                size_item = QTableWidgetItem(row["size_name"] or "—")
-                size_item.setTextAlignment(Qt.AlignCenter)
-                tbl.setItem(r, 1, size_item)
-                qty_item = QTableWidgetItem(str(row["quantity"]))
-                qty_item.setTextAlignment(Qt.AlignCenter)
-                tbl.setItem(r, 2, qty_item)
-                price_item = QTableWidgetItem(f"₱{float(row['item_price']):,.2f}")
-                price_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                tbl.setItem(r, 3, price_item)
         except Exception as err:
-            tbl.setRowCount(1)
-            tbl.setItem(0, 0, QTableWidgetItem(f"Error: {err}"))
+            items = []
+            lines.append(f"  Error loading items: {err}")
 
-        bl.addWidget(tbl)
+        for itm in items:
+            name  = (itm["product_name"] or "—")[:21]
+            size  = (itm["size_name"]    or "—")[:6]
+            qty   = itm["quantity"]
+            price = float(itm["item_price"])
+            right = f"₱{price:>8,.2f}"
+            label = f"{name:<22} {size:>6} {qty:>3}"
+            gap   = max(1, W - len(label) - len(right))
+            lines.append(label + " " * gap + right)
 
-        # Total card
-        tot_f = QFrame()
-        tot_f.setStyleSheet(
-            "QFrame { background-color: white; border-radius: 10px; border: 1px solid #c8b87a; }"
-        )
-        tot_l = QHBoxLayout(tot_f)
-        tot_l.setContentsMargins(18, 12, 18, 12)
-        lbl = QLabel("ORDER TOTAL")
-        lbl.setStyleSheet(
-            "font-size: 11px; font-weight: bold; color: #888; "
-            "letter-spacing: 1px; background: transparent; border: none;"
-        )
-        val = QLabel(f"₱{self.order_total:,.2f}")
-        val.setStyleSheet(
-            "font-size: 24px; font-weight: bold; color: #2b2b2b; "
-            "background: transparent; border: none;"
-        )
-        tot_l.addWidget(lbl)
-        tot_l.addStretch()
-        tot_l.addWidget(val)
-        bl.addWidget(tot_f)
+        lines.append(div())
+        lines.append("")
 
-        close_btn = QPushButton("Close")
-        close_btn.setStyleSheet(ADMIN_BTN_STYLE)
-        close_btn.setFixedHeight(36)
-        close_btn.clicked.connect(self.accept)
-        bl.addWidget(close_btn, alignment=Qt.AlignRight)
+        # Total
+        lines.append(div("═"))
+        lines.append(two_col("ORDER TOTAL", f"₱{self.order_total:>9,.2f}"))
+        lines.append(div("═"))
+        lines.append("")
+
+        # Footer
+        lines.append(div())
+        lines.append(ln("Thank you for choosing", "c"))
+        lines.append(ln('MIGUELITOS Hyped Mangoes!', "c"))
+        lines.append(div())
+        lines.append(ln("*** Customer Copy ***", "c"))
+        lines.append("")
+
+        self._txt.setPlainText("\n".join(lines))
+
+    def _on_print(self):
+        from PyQt5.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self, "Print Receipt",
+            f"Receipt for Order #{self.order_id} sent to printer.\n\n"
+            "(Connect a receipt printer and configure it\n"
+            "in system settings to enable printing.)"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -404,7 +492,7 @@ class OrdersDialog(QDialog):
         root.setSpacing(0)
 
         _dialog_header(root, "📋  Order History",
-                       subtitle="Double-click a row to view its full breakdown")
+                       subtitle="Double-click a row to view its receipt")
 
         body = QWidget()
         body.setStyleSheet("background: transparent;")
@@ -448,7 +536,7 @@ class OrdersDialog(QDialog):
         self._table.doubleClicked.connect(self._view_detail)
         bl.addWidget(self._table)
 
-        hint = QLabel("Double-click any row to view the full order breakdown.")
+        hint = QLabel("Double-click any row to view its receipt.")
         hint.setStyleSheet("color: #bbb; font-size: 11px; background: transparent;")
         hint.setAlignment(Qt.AlignCenter)
         bl.addWidget(hint)
@@ -495,14 +583,14 @@ class OrdersDialog(QDialog):
 
     def _view_detail(self, index):
         r = index.row()
-        order_id  = int(self._table.item(r, 0).text())
+        order_id   = int(self._table.item(r, 0).text())
         order_date = self._table.item(r, 1).text()
         total_str  = self._table.item(r, 3).text().replace("₱", "").replace(",", "")
         try:
             total = float(total_str)
         except ValueError:
             total = 0.0
-        dlg = OrderDetailDialog(order_id, total, order_date, parent=self)
+        dlg = ReceiptDialog(order_id, total, order_date, parent=self)
         dlg.exec_()
 
 
@@ -1296,13 +1384,13 @@ class ReportPage(QWidget):
         nav_layout = QHBoxLayout()
         nav_layout.setSpacing(8)
         for label, icon_path, page_key in [
-            ("  TRANSACTIONS", "TRANSACTION.png", "pos"),
-            ("  INVENTORY",    "inventory.png",   "inventory"),
+            ("🛒 TRANSACTIONS", "TRANSACTION.png", "pos"),
+            ("📦 INVENTORY",    "inventory.png",   "inventory"),
         ]:
             btn = QPushButton(label)
             btn.setIcon(QIcon(icon_path))
             btn.setIconSize(QSize(18, 18))
-            btn.setFixedSize(160, 36)
+            btn.setFixedSize(170, 36)
             btn.setStyleSheet(NAV_BTN_STYLE)
             _k = page_key
             btn.clicked.connect(

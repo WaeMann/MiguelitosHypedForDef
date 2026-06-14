@@ -417,6 +417,8 @@ class PaymentDialog(QDialog):
             QMessageBox.warning(self, "Insufficient Cash",
                                 "Cash tendered must be ≥ the order total.")
             return
+        self.cash_paid = cash
+        self.change_given = cash - self.order_total
         self.payment_confirmed = True
         self.accept()
 
@@ -436,6 +438,185 @@ class PaymentDialog(QDialog):
 
     def _backspace_cash(self):
         self.cash_input.backspace()
+
+
+# ---------------------------------------------------------------------------
+# Receipt dialog
+# ---------------------------------------------------------------------------
+class ReceiptDialog(QDialog):
+    """Displays a formatted receipt after a completed order."""
+
+    STORE_NAME    = "MIGUELITO'S HYPE MANGO"
+    STORE_TAGLINE = "Your favorite mango shake destination!"
+    RECEIPT_WIDTH = 42   # characters wide for the monospace receipt
+
+    def __init__(self, order_rows, total, cash_paid, change_given, order_id, parent=None):
+        super().__init__(parent)
+        self.order_rows   = order_rows
+        self.total        = total
+        self.cash_paid    = cash_paid
+        self.change_given = change_given
+        self.order_id     = order_id
+
+        self.setWindowTitle(f"Receipt – Order #{order_id}")
+        self.resize(480, 640)
+        self.setMinimumSize(420, 500)
+        self.setStyleSheet("QDialog { background-color: #FFFDF7; }")
+        self._build()
+        self._center()
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # ── Header bar ───────────────────────────────────────────────────────
+        header = QFrame()
+        header.setFixedHeight(56)
+        header.setStyleSheet("background-color: #E8D28C;")
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(20, 0, 20, 0)
+        hl.setSpacing(10)
+
+        title_lbl = QLabel("🧾  Order Receipt")
+        title_lbl.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        title_lbl.setStyleSheet("color: #2b2b2b; background: transparent;")
+        hl.addWidget(title_lbl)
+        hl.addStretch()
+
+        print_btn = QPushButton("🖨  Print / Save")
+        print_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #34699A; color: white;
+                border-radius: 8px; font-size: 12px;
+                padding: 4px 14px;
+            }
+            QPushButton:hover { background-color: #2a567a; }
+        """)
+        print_btn.clicked.connect(self._print)
+        hl.addWidget(print_btn)
+
+        root.addWidget(header)
+
+        # Amber accent line
+        accent = QFrame()
+        accent.setFixedHeight(3)
+        accent.setStyleSheet("background-color: #D9A800; border: none;")
+        root.addWidget(accent)
+
+        # ── Scrollable receipt body ───────────────────────────────────────────
+        from PyQt5.QtWidgets import QTextEdit
+        self._txt = QTextEdit()
+        self._txt.setReadOnly(True)
+        self._txt.setFont(QFont("Courier New", 11))
+        self._txt.setStyleSheet("""
+            QTextEdit {
+                background-color: #FFFDF7;
+                color: #1a1a1a;
+                border: none;
+                padding: 12px 20px;
+            }
+        """)
+        root.addWidget(self._txt)
+
+        # ── Footer buttons ────────────────────────────────────────────────────
+        footer = QFrame()
+        footer.setFixedHeight(56)
+        footer.setStyleSheet("background-color: #F5EFDC; border-top: 1px solid #E0D6B0;")
+        fl = QHBoxLayout(footer)
+        fl.setContentsMargins(20, 0, 20, 0)
+        fl.setSpacing(10)
+        fl.addStretch()
+
+        new_order_btn = QPushButton("New Order  →")
+        new_order_btn.setFont(QFont("Segoe UI", 12, QFont.Bold))
+        new_order_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #1e7f3f; color: white;
+                border-radius: 10px; font-size: 13px;
+                padding: 6px 20px;
+            }
+            QPushButton:hover { background-color: #166330; }
+        """)
+        new_order_btn.clicked.connect(self.accept)
+        fl.addWidget(new_order_btn)
+
+        root.addWidget(footer)
+
+        self._render()
+
+    def _render(self):
+        import datetime
+        W = self.RECEIPT_WIDTH
+
+        def center(text):
+            return text.center(W)
+
+        def divider(ch="─"):
+            return ch * W
+
+        def two_col(left, right):
+            gap = max(1, W - len(left) - len(right))
+            return left + " " * gap + right
+
+        lines = []
+        lines.append(divider("═"))
+        lines.append(center(self.STORE_NAME))
+        lines.append(center(self.STORE_TAGLINE))
+        lines.append(divider("═"))
+        lines.append("")
+
+        now = datetime.datetime.now().strftime("%Y-%m-%d  %I:%M %p")
+        lines.append(two_col("Order #  :", str(self.order_id)))
+        lines.append(two_col("Date     :", now))
+        lines.append("")
+
+        lines.append(divider())
+        lines.append(f"{'ITEM':<24} {'QTY':>4} {'SIZE':>6}  {'TOTAL':>4}")
+        lines.append(divider())
+
+        for row in self.order_rows:
+            name  = row["name"][:22]
+            qty   = str(row["qty"])
+            size  = row.get("size", "")
+            price = f"₱{row['price']:,}"
+            label = f"{name} ×{qty}"
+            right = f"{size:>6}  {price:>6}"
+            gap   = max(1, W - len(label) - len(right))
+            lines.append(label + " " * gap + right)
+
+        lines.append(divider())
+        lines.append(two_col("TOTAL DUE", f"₱{self.total:,}"))
+        lines.append(divider("═"))
+        lines.append("")
+        lines.append(two_col("Cash Tendered", f"₱{self.cash_paid:,}"))
+        lines.append(two_col("Change", f"₱{self.change_given:,}"))
+        lines.append("")
+        lines.append(divider())
+        lines.append(center("Thank you for visiting Miguelito's!"))
+        lines.append(center('"Stay Hyped. Stay Mango."'))
+        lines.append(divider())
+        lines.append(center("*** Customer Copy ***"))
+        lines.append("")
+
+        self._txt.setPlainText("\n".join(lines))
+
+    def _print(self):
+        from PyQt5.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self, "Print Receipt",
+            f"Receipt for Order #{self.order_id} sent to printer.\n\n"
+            "(Connect a receipt printer and configure it\n"
+            "in the system settings to enable printing.)"
+        )
+
+    def _center(self):
+        if self.parent():
+            pg = self.parent().window().geometry()
+            self.move(
+                pg.x() + (pg.width()  - self.width())  // 2,
+                pg.y() + (pg.height() - self.height()) // 2,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -520,7 +701,8 @@ def load_products_from_db():
 
 
 def save_order_to_db(order_rows, total):
-    """Persist a completed order and deduct product + ingredient stock."""
+    """Persist a completed order and deduct product + ingredient stock.
+    Returns the new order_id, or None on failure."""
     try:
         db = get_db_connection()
         cur = db.cursor()
@@ -568,8 +750,10 @@ def save_order_to_db(order_rows, total):
 
         db.commit()
         db.close()
+        return order_id
     except Exception as err:
         print(f"[DB] Could not save order: {err}")
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -744,21 +928,21 @@ class IMS(QWidget):
         nav_layout = QHBoxLayout()
         nav_layout.setSpacing(8)
 
-        self.inventory_top_btn = QPushButton("INVENTORY")
-        self.inventory_top_btn.setFixedSize(130, 36)
+        self.inventory_top_btn = QPushButton("📦 INVENTORY")
+        self.inventory_top_btn.setFixedSize(170, 36)
         self.inventory_top_btn.setStyleSheet(NAV_BTN_STYLE)
         drop_shadow(self.inventory_top_btn, blur=18, alpha=100)
 
-        self.report_top_btn = QPushButton("REPORT")
-        self.report_top_btn.setFixedSize(130, 36)
+        self.report_top_btn = QPushButton("📋 REPORT")
+        self.report_top_btn.setFixedSize(170, 36)
         self.report_top_btn.setStyleSheet(NAV_BTN_STYLE)
         drop_shadow(self.report_top_btn, blur=18, alpha=100)
 
         nav_layout.addWidget(self.inventory_top_btn)
         nav_layout.addWidget(self.report_top_btn)
 
-        self.admin_btn = QPushButton("LOG OUT")
-        self.admin_btn.setFixedSize(150, 36)
+        self.admin_btn = QPushButton("🚪 LOG OUT")
+        self.admin_btn.setFixedSize(170, 36)
         self.admin_btn.setStyleSheet(NAV_BTN_STYLE)
         drop_shadow(self.admin_btn, blur=18, alpha=100)
 
@@ -1221,8 +1405,20 @@ class IMS(QWidget):
         if not dlg.payment_confirmed:
             return  # cashier cancelled — keep the order open
 
+        cash_paid    = getattr(dlg, "cash_paid",    self.order_total)
+        change_given = getattr(dlg, "change_given", 0)
+
         # ── Save to DB ────────────────────────────────────────────────────────
-        save_order_to_db(order_rows, self.order_total)
+        order_id = save_order_to_db(order_rows, self.order_total)
+
+        # ── Show receipt ──────────────────────────────────────────────────────
+        receipt = ReceiptDialog(
+            order_rows, self.order_total,
+            cash_paid, change_given,
+            order_id or "—",
+            parent=self,
+        )
+        receipt.exec_()
 
         # ── Notify report page ─────────────────────────────────────────────────
         if self.report_page:

@@ -202,14 +202,14 @@ class IngredientsPage(QWidget):
         nav_layout.setSpacing(8)
 
         for label, icon_path, page_key in [
-            ("  TRANSACTIONS", "pos.png",       "pos"),
-            ("  REPORT",       "reports.png",   "report"),
-            ("  INVENTORY", "inventory.png", "inventory"),
+            ("🛒 TRANSACTIONS", "pos.png",       "pos"),
+            ("📋 REPORT",       "reports.png",   "report"),
+            ("📦 INVENTORY", "inventory.png", "inventory"),
         ]:
             btn = QPushButton(label)
             btn.setIcon(QIcon(icon_path))
             btn.setIconSize(QSize(18, 18))
-            btn.setFixedSize(160, 36)
+            btn.setFixedSize(170, 36)
             btn.setStyleSheet(NAV_BTN_STYLE)
             _key = page_key
             btn.clicked.connect(lambda checked, k=_key: self.switch_callback(k) if self.switch_callback else None)
