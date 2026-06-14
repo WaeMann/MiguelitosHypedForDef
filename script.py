@@ -444,10 +444,15 @@ class PaymentDialog(QDialog):
 def load_products_from_db():
     """
     Returns:
-        categories   : dict  { category_name: [product_dict, ...] }
-        product_map  : dict  { product_name: product_dict }
-        sizes        : list  of size_name strings
-        size_mult    : dict  { size_name: float multiplier }
+        categories        : dict  { category_name: [product_dict, ...] }
+        product_map       : dict  { product_name: product_dict }
+        sizes             : list  of size_name strings
+        size_mult         : dict  { size_name: float multiplier }
+
+    Each product_dict now contains:
+        'has_ingredients' : bool  – True if at least one ingredient is linked
+        'stock'           : int   – computed from ingredients if linked,
+                                    otherwise the raw DB stock value
     """
     categories = {}
     product_map = {}
@@ -465,7 +470,34 @@ def load_products_from_db():
             LEFT JOIN categories c ON p.category_id = c.id
             ORDER BY c.category_name, p.product_name
         """)
-        for row in cur.fetchall():
+        products = cur.fetchall()
+
+        # Load all ingredient links once
+        cur.execute("""
+            SELECT pi.product_id, pi.amount_used, i.stock_left
+            FROM product_ingredients pi
+            JOIN ingredients i ON pi.ingredient_id = i.id
+        """)
+        ingredient_links = {}
+        for lnk in cur.fetchall():
+            ingredient_links.setdefault(lnk["product_id"], []).append(lnk)
+
+        for row in products:
+            pid = row["id"]
+            links = ingredient_links.get(pid)
+
+            if links:
+                # Stock = how many full orders we can make given ingredient stock
+                row["has_ingredients"] = True
+                row["stock"] = min(
+                    int(lnk["stock_left"] / lnk["amount_used"])
+                    for lnk in links
+                    if lnk["amount_used"] > 0
+                )
+            else:
+                row["has_ingredients"] = False
+                # stock stays as-is from the DB column
+
             cat = row["category_name"] or "Other"
             categories.setdefault(cat, [])
             categories[cat].append(row)
@@ -864,11 +896,18 @@ class IMS(QWidget):
             name = product["product_name"]
             image_path = product.get("image_path") or "images/default.png"
             stock = product.get("stock", 0)
+            has_ingredients = product.get("has_ingredients", False)
 
             card = QFrame()
             card.setFixedSize(250, 150)
 
-            if stock <= 0:
+            if not has_ingredients:
+                # No ingredients linked — card is locked/orange-tinted
+                card.setStyleSheet("""
+                    QFrame { background-color: #f0d080; border-radius: 15px;
+                             border: 2px dashed #c8a020; }
+                """)
+            elif stock <= 0:
                 card.setStyleSheet("""
                     QFrame { background-color: #cccccc; border-radius: 15px; }
                 """)
@@ -880,7 +919,11 @@ class IMS(QWidget):
 
             drop_shadow(card, blur=25, alpha=150)
 
-            if stock > 0:
+            # Only make clickable if ingredients are linked AND stock > 0
+            if has_ingredients and stock > 0:
+                card.mousePressEvent = lambda e, n=name: self.item_clicked(n)
+            elif not has_ingredients:
+                # Still make it clickable so the warning message fires
                 card.mousePressEvent = lambda e, n=name: self.item_clicked(n)
 
             vbox = QVBoxLayout(card)
@@ -900,9 +943,14 @@ class IMS(QWidget):
             text.setAlignment(Qt.AlignCenter)
             text.setStyleSheet("color: #2b2b2b; font-weight: bold;")
 
-            stock_lbl = QLabel(f"Stock: {stock}")
-            stock_lbl.setAlignment(Qt.AlignCenter)
-            stock_lbl.setStyleSheet("color: #555; font-size: 11px;")
+            if not has_ingredients:
+                stock_lbl = QLabel("⚠ No ingredients linked")
+                stock_lbl.setAlignment(Qt.AlignCenter)
+                stock_lbl.setStyleSheet("color: #8b5c00; font-size: 10px; font-weight: bold;")
+            else:
+                stock_lbl = QLabel(f"Stock: {stock}")
+                stock_lbl.setAlignment(Qt.AlignCenter)
+                stock_lbl.setStyleSheet("color: #555; font-size: 11px;")
 
             vbox.addWidget(img)
             vbox.addWidget(text)
@@ -992,11 +1040,23 @@ class IMS(QWidget):
     # Slots
     # -------------------------------------------------------------------------
     def item_clicked(self, name):
+        product = self.product_map.get(name, {})
+
+        # Block ordering if no ingredients are linked
+        if not product.get("has_ingredients", False):
+            QMessageBox.warning(
+                self,
+                "No Ingredients Linked",
+                f"'{name}' cannot be ordered yet.\n\n"
+                "Please link at least one ingredient to this product in\n"
+                "Inventory → select product → ⚙ Manage.",
+            )
+            return
+
         self.bottom_box.hide()
         self.selected_item = name
         self.yellow_text.setText(name)
         self.update_price_display()
-        product = self.product_map.get(name, {})
         image_path = product.get("image_path") or "images/default.png"
         self.set_menu_preview_image(image_path)
 

@@ -1079,8 +1079,35 @@ class InventoryPage(QWidget):
                 ORDER BY c.category_name, p.product_name
             """)
             rows = cur.fetchall()
+
+            # Pre-load ingredient links for all products in one query
+            cur.execute("""
+                SELECT pi.product_id, pi.amount_used, i.stock_left
+                FROM product_ingredients pi
+                JOIN ingredients i ON pi.ingredient_id = i.id
+            """)
+            ingredient_links = {}
+            for link in cur.fetchall():
+                ingredient_links.setdefault(link["product_id"], []).append(link)
+
             db.close()
+
             for product in rows:
+                pid = product["id"]
+                links = ingredient_links.get(pid)
+
+                # Auto-calculate stock: minimum of (ingredient.stock_left / amount_used)
+                # across all linked ingredients. If none linked, keep manual stock.
+                if links:
+                    computed = min(
+                        int(lnk["stock_left"] / lnk["amount_used"])
+                        for lnk in links
+                        if lnk["amount_used"] > 0
+                    )
+                    display_stock = computed
+                else:
+                    display_stock = product["stock"]
+
                 row = self.table.rowCount()
                 self.table.insertRow(row)
                 self.table.setRowHeight(row, 40)
@@ -1088,14 +1115,14 @@ class InventoryPage(QWidget):
                     str(row + 1),
                     product["product_name"],
                     f"{product['base_price']:.2f}" if product["base_price"] is not None else "0.00",
-                    str(product["stock"]),
+                    str(display_stock),
                     ", ".join(self._sizes),
                     product["category_name"] or "",
                     product["image_path"] or "",
                 ]):
                     self.table.setItem(row, col, self._make_cell(val))
                 self.table.setItem(row, 0, self._make_cell(str(row + 1)))
-                self.table.item(row, 0).setData(Qt.UserRole, product["id"])
+                self.table.item(row, 0).setData(Qt.UserRole, pid)
         except Exception as err:
             QMessageBox.critical(self, "DB Error", f"Could not load products:\n{err}")
 
