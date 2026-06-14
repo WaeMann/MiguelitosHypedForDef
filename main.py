@@ -30,8 +30,19 @@ def build_app(role):
         switch_callback=switch,
         report_page=pages["report"],
         inventory_page=pages["inventory"],
+        ingredients_page=pages["ingredients"],
         role=role,
     )
+
+    # Wire cross-page refresh callbacks so every window auto-refreshes on changes.
+    # When inventory changes → refresh POS menu cards and ingredients combos.
+    def _on_inventory_change():
+        pages["pos"].refresh_products()
+
+    pages["inventory"].on_change = _on_inventory_change
+
+    # When ingredients change → no additional cross-page refresh needed beyond load_from_db.
+    pages["ingredients"].on_change = lambda: None
 
     for p in pages.values():
         stack.addWidget(p)

@@ -556,6 +556,9 @@ class InventoryPage(QWidget):
         self.selected_row = None
         self._row_ids = {}
 
+        # Callback wired by main.py to notify other pages when data changes.
+        self.on_change = None
+
         # Load sizes once for use in both forms
         self._sizes = load_sizes_from_db()
 
@@ -1152,6 +1155,10 @@ class InventoryPage(QWidget):
         self.table.setItem(row, 0, self._make_cell(str(row + 1)))
         self.table.item(row, 0).setData(Qt.UserRole, new_id)
         self.clear_inputs()
+        # Reload table from DB so all windows stay in sync, then notify siblings.
+        self.load_from_db()
+        if self.on_change:
+            self.on_change()
 
     def load_selected_row(self, row, column):
         self._on_row_clicked(row, column)
@@ -1205,6 +1212,10 @@ class InventoryPage(QWidget):
             self.table.setItem(self.selected_row, col, self._make_cell(val))
         self.action_info.setText(f"Selected:  {name}   |   Qty: {qty}")
         self.edit_form.hide()
+        # Reload table from DB so all windows stay in sync, then notify siblings.
+        self.load_from_db()
+        if self.on_change:
+            self.on_change()
 
     def delete_item(self):
         if self.selected_row is None:

@@ -1493,7 +1493,7 @@ class ReportPage(QWidget):
         ref_btn.setStyleSheet(ADMIN_BTN_STYLE)
         ref_btn.setCursor(Qt.PointingHandCursor)
         drop_shadow(ref_btn, blur=10, alpha=55)
-        ref_btn.clicked.connect(self.refresh_report)
+        ref_btn.clicked.connect(self.reload_from_db_and_refresh)
         bl.addWidget(ref_btn)
 
         root.addWidget(bar)
@@ -1535,6 +1535,13 @@ class ReportPage(QWidget):
             self.sales_data[item_name] = self.sales_data.get(item_name, 0) + value
         today = date.today().isoformat()
         self.daily_sales[today] = self.daily_sales.get(today, 0) + total
+        self.refresh_report()
+
+    def reload_from_db_and_refresh(self):
+        """Reload all sales data fresh from DB, then re-render all charts."""
+        self.sales_data  = {}
+        self.daily_sales = {}
+        self._load_from_db()
         self.refresh_report()
 
     def refresh_report(self):

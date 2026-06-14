@@ -545,11 +545,12 @@ def save_order_to_db(order_rows, total):
 # ---------------------------------------------------------------------------
 class IMS(QWidget):
     def __init__(self, switch_callback=None, report_page=None,
-                 inventory_page=None, role="cashier"):
+                 inventory_page=None, ingredients_page=None, role="cashier"):
         super().__init__()
         self.switch_callback = switch_callback
         self.report_page = report_page
         self.inventory_page = inventory_page
+        self.ingredients_page = ingredients_page
         self.role = role
 
         self.section_grids = []
@@ -1165,11 +1166,15 @@ class IMS(QWidget):
 
         # ── Notify report page ─────────────────────────────────────────────────
         if self.report_page:
-            self.report_page.update_sales(report_items, self.order_total)
+            self.report_page.reload_from_db_and_refresh()
 
         # ── Refresh inventory page so stock numbers update live ────────────────
         if self.inventory_page:
             self.inventory_page.load_from_db()
+
+        # ── Refresh ingredients page so stock counts update live ───────────────
+        if self.ingredients_page:
+            self.ingredients_page.load_from_db()
 
         # ── Clear order list ──────────────────────────────────────────────────
         for i in reversed(range(self.order_layout.count())):
