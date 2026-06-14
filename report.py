@@ -15,7 +15,12 @@ matplotlib.use("Qt5Agg")
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from db import get_db_connection, hash_password
+import time as _time
+
+from db import (
+    get_db_connection, gen_salt, hash_password_pbkdf2,
+    audit as db_audit,
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -783,9 +788,12 @@ class AddUserDialog(QDialog):
                 self._status_lbl.setText(f"⚠  Username '{uname}' is already taken.")
                 db.close()
                 return
+            salt  = gen_salt()
+            phash = hash_password_pbkdf2(pwd, salt)
             cur.execute(
-                "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)",
-                (uname, hash_password(pwd), role),
+                "INSERT INTO users (username, password_hash, salt, role) "
+                "VALUES (%s, %s, %s, %s)",
+                (uname, phash, salt, role),
             )
             db.commit()
             db.close()
@@ -896,11 +904,13 @@ class ResetPasswordDialog(QDialog):
             self._status_lbl.setText("⚠  Passwords do not match.")
             return
         try:
-            db  = get_db_connection()
-            cur = db.cursor()
+            salt  = gen_salt()
+            phash = hash_password_pbkdf2(p1, salt)
+            db    = get_db_connection()
+            cur   = db.cursor()
             cur.execute(
-                "UPDATE users SET password_hash = %s WHERE id = %s",
-                (hash_password(p1), self.user_id),
+                "UPDATE users SET password_hash=%s, salt=%s WHERE id=%s",
+                (phash, salt, self.user_id),
             )
             db.commit()
             db.close()
@@ -918,11 +928,12 @@ class ResetPasswordDialog(QDialog):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class UsersDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, current_username: str = "", parent=None):
         super().__init__(parent)
+        self.current_username = current_username
         self.setWindowTitle("Manage Users")
-        self.resize(780, 520)
-        self.setMinimumSize(680, 420)
+        self.resize(880, 540)
+        self.setMinimumSize(720, 440)
         self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
         self._build()
         _center_dialog(self)
@@ -971,6 +982,12 @@ class UsersDialog(QDialog):
         self._del_btn.clicked.connect(self._delete_user)
         tb.addWidget(self._del_btn)
 
+        self._unlock_btn = QPushButton("🔓  Unlock User")
+        self._unlock_btn.setStyleSheet(AMBER_BTN_STYLE)
+        self._unlock_btn.setFixedHeight(34)
+        self._unlock_btn.clicked.connect(self._unlock_user)
+        tb.addWidget(self._unlock_btn)
+
         tb.addStretch()
 
         refresh_btn = QPushButton("🔄  Refresh")
@@ -984,14 +1001,16 @@ class UsersDialog(QDialog):
         # Table
         self._table = QTableWidget()
         self._table.setStyleSheet(TABLE_STYLE)
-        self._table.setColumnCount(4)
+        self._table.setColumnCount(6)
         self._table.setHorizontalHeaderLabels(
-            ["ID", "Username", "Role", "Created"]
+            ["ID", "Username", "Role", "Created", "Fails", "Status"]
         )
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-        self._table.setColumnWidth(0, 55)
-        self._table.setColumnWidth(2, 90)
+        self._table.setColumnWidth(0, 45)
+        self._table.setColumnWidth(2, 80)
+        self._table.setColumnWidth(4, 50)
+        self._table.setColumnWidth(5, 100)
         self._table.verticalHeader().setVisible(False)
         self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -1020,6 +1039,7 @@ class UsersDialog(QDialog):
             QMessageBox.critical(self, "Database Error", str(err))
             return
 
+        now_ts = int(_time.time())
         self._table.setRowCount(len(rows))
         for r, row in enumerate(rows):
             id_item = QTableWidgetItem(str(row["id"]))
@@ -1028,8 +1048,7 @@ class UsersDialog(QDialog):
 
             self._table.setItem(r, 1, QTableWidgetItem(row["username"]))
 
-            role_text = row["role"].title()
-            role_item = QTableWidgetItem(role_text)
+            role_item = QTableWidgetItem(row["role"].title())
             role_item.setTextAlignment(Qt.AlignCenter)
             role_item.setForeground(
                 QColor("#e67e22") if row["role"] == "admin" else QColor("#34699A")
@@ -1038,6 +1057,22 @@ class UsersDialog(QDialog):
 
             created = str(row["created_at"]) if row["created_at"] else "—"
             self._table.setItem(r, 3, QTableWidgetItem(created))
+
+            fails = int(row.get("failed_attempts") or 0)
+            fail_item = QTableWidgetItem(str(fails))
+            fail_item.setTextAlignment(Qt.AlignCenter)
+            if fails > 0:
+                fail_item.setForeground(QColor("#c0392b"))
+            self._table.setItem(r, 4, fail_item)
+
+            locked_until = int(row.get("locked_until") or 0)
+            is_locked = locked_until > now_ts
+            status_item = QTableWidgetItem("🔒 Locked" if is_locked else "✅ Active")
+            status_item.setTextAlignment(Qt.AlignCenter)
+            status_item.setForeground(
+                QColor("#c0392b") if is_locked else QColor("#1e7f3f")
+            )
+            self._table.setItem(r, 5, status_item)
 
         self._status_lbl.setText(f"{len(rows)} user(s)  —  Select a row to act on it")
 

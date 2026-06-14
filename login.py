@@ -2,6 +2,8 @@
 
 import sys
 import os
+import secrets
+import time
 
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit, QPushButton,
@@ -9,24 +11,23 @@ from PyQt5.QtWidgets import (
     QDialog, QFrame, QMessageBox, QSizePolicy,
 )
 from PyQt5.QtGui import (
-    QColor, QPixmap, QPainter, QBrush, QPen, QPolygonF,
-    QFont,
+    QColor, QPixmap, QPainter, QBrush, QPen, QPolygonF, QFont,
 )
 from PyQt5.QtCore import Qt, QPointF
 
-from db import hash_password, get_db_connection
+from db import (
+    hash_password, hash_password_pbkdf2, verify_password, gen_salt,
+    get_db_connection, log_login, start_session, audit,
+    MAX_ATTEMPTS, LOCKOUT_SECS,
+)
 
 
-# ---------------------------------------------------------------------------
-# Reusable styled dialogs
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared dialog style
+# ─────────────────────────────────────────────────────────────────────────────
 DIALOG_STYLE = """
-QDialog {
-    background-color: #FFF8E7;
-}
-QLabel {
-    color: #333333;
-}
+QDialog { background-color: #FFF8E7; }
+QLabel  { color: #333333; }
 QLineEdit {
     border: 1px solid #ccc;
     border-radius: 6px;
@@ -34,9 +35,7 @@ QLineEdit {
     font-size: 13px;
     background: white;
 }
-QLineEdit:focus {
-    border: 1px solid #FFD700;
-}
+QLineEdit:focus { border: 1px solid #FFD700; }
 QPushButton#confirmBtn {
     background-color: #008000;
     color: white;
@@ -46,95 +45,14 @@ QPushButton#confirmBtn {
     font-size: 13px;
     font-weight: bold;
 }
-QPushButton#confirmBtn:hover {
-    background-color: #006600;
-}
-QCheckBox {
-    color: #555;
-    font-size: 12px;
-}
+QPushButton#confirmBtn:hover { background-color: #006600; }
+QCheckBox { color: #555; font-size: 12px; }
 """
 
 
-class CreateAccountDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Create Account")
-        self.setFixedSize(350, 300)
-        self.setStyleSheet(DIALOG_STYLE)
-        self._build()
-        self._center_on_parent()
-
-    def _build(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(10)
-
-        title = QLabel("New Cashier Account")
-        title.setFont(QFont("Cambria", 14, QFont.Bold))
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
-
-        form = QFormLayout()
-        form.setSpacing(8)
-        self.user_edit = QLineEdit()
-        self.user_edit.setPlaceholderText("username")
-        self.pass_edit = QLineEdit()
-        self.pass_edit.setPlaceholderText("password")
-        self.pass_edit.setEchoMode(QLineEdit.Password)
-        form.addRow("Username:", self.user_edit)
-        form.addRow("Password:", self.pass_edit)
-        layout.addLayout(form)
-
-        show_cb = QCheckBox("Show Password")
-        show_cb.toggled.connect(
-            lambda on: self.pass_edit.setEchoMode(
-                QLineEdit.Normal if on else QLineEdit.Password
-            )
-        )
-        layout.addWidget(show_cb)
-        layout.addStretch()
-
-        btn = QPushButton("Create")
-        btn.setObjectName("confirmBtn")
-        btn.setFixedHeight(38)
-        btn.clicked.connect(self._register)
-        layout.addWidget(btn)
-
-    def _register(self):
-        u = self.user_edit.text().strip()
-        p = self.pass_edit.text()
-        if not u or not p:
-            QMessageBox.critical(self, "Error", "Please fill in both fields.")
-            return
-        try:
-            db = get_db_connection()
-            cur = db.cursor(buffered=True)
-            cur.execute("SELECT username FROM users WHERE username = %s", (u,))
-            if cur.fetchone():
-                QMessageBox.critical(self, "Error", "Username already exists.")
-                db.close()
-                return
-            cur.execute(
-                "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, 'cashier')",
-                (u, hash_password(p)),
-            )
-            db.commit()
-            db.close()
-            QMessageBox.information(self, "Success", f"Cashier account '{u}' created successfully!")
-            self.accept()
-        except Exception as err:
-            QMessageBox.critical(self, "Database Error", str(err))
-
-    def _center_on_parent(self):
-        if self.parent():
-            pg = self.parent().geometry()
-            self.move(
-                pg.x() + (pg.width() - self.width()) // 2,
-                pg.y() + (pg.height() - self.height()) // 2,
-            )
-
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Reset Password Dialog  (Forgot Password flow — cashiers only)
+# ─────────────────────────────────────────────────────────────────────────────
 class ResetPasswordDialog(QDialog):
     def __init__(self, username: str, parent=None):
         super().__init__(parent)
@@ -169,7 +87,7 @@ class ResetPasswordDialog(QDialog):
         self.re_pass.setPlaceholderText("re-enter new password")
         self.re_pass.setEchoMode(QLineEdit.Password)
         form.addRow("New Password:", self.new_pass)
-        form.addRow("Re-Enter:", self.re_pass)
+        form.addRow("Re-Enter:",     self.re_pass)
         layout.addLayout(form)
 
         show_cb = QCheckBox("Show Password")
@@ -183,7 +101,7 @@ class ResetPasswordDialog(QDialog):
         btn.clicked.connect(self._confirm)
         layout.addWidget(btn)
 
-    def _toggle_pw(self, on):
+    def _toggle_pw(self, on: bool):
         mode = QLineEdit.Normal if on else QLineEdit.Password
         self.new_pass.setEchoMode(mode)
         self.re_pass.setEchoMode(mode)
@@ -198,11 +116,13 @@ class ResetPasswordDialog(QDialog):
             QMessageBox.critical(self, "Error", "Passwords do not match.")
             return
         try:
-            db = get_db_connection()
-            cur = db.cursor()
+            salt  = gen_salt()
+            phash = hash_password_pbkdf2(p1, salt)
+            db    = get_db_connection()
+            cur   = db.cursor()
             cur.execute(
-                "UPDATE users SET password_hash = %s WHERE username = %s",
-                (hash_password(p1), self.username),
+                "UPDATE users SET password_hash=%s, salt=%s WHERE username=%s",
+                (phash, salt, self.username),
             )
             db.commit()
             db.close()
@@ -215,14 +135,14 @@ class ResetPasswordDialog(QDialog):
         if self.parent():
             pg = self.parent().geometry()
             self.move(
-                pg.x() + (pg.width() - self.width()) // 2,
+                pg.x() + (pg.width()  - self.width())  // 2,
                 pg.y() + (pg.height() - self.height()) // 2,
             )
 
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # Custom painted background widget
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 class LoginBackground(QWidget):
     CREAM  = QColor("#FFF8E7")
     YELLOW = QColor("#FFD700")
@@ -231,9 +151,8 @@ class LoginBackground(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._logo_pixmap = None
-        logo_path = "logo.png"
-        if os.path.exists(logo_path):
-            self._logo_pixmap = QPixmap(logo_path)
+        if os.path.exists("logo.png"):
+            self._logo_pixmap = QPixmap("logo.png")
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -243,17 +162,14 @@ class LoginBackground(QWidget):
         painter.fillRect(0, 0, w, h, self.CREAM)
 
         poly = QPolygonF([
-            QPointF(0.75 * w, 0),
-            QPointF(w, 0),
-            QPointF(w, h),
-            QPointF(0.55 * w, h),
+            QPointF(0.75 * w, 0), QPointF(w, 0),
+            QPointF(w, h),        QPointF(0.55 * w, h),
         ])
         painter.setBrush(QBrush(self.YELLOW))
         painter.setPen(Qt.NoPen)
         painter.drawPolygon(poly)
 
-        pen = QPen(self.GREEN, 6)
-        painter.setPen(pen)
+        painter.setPen(QPen(self.GREEN, 6))
         painter.drawLine(QPointF(0.75 * w, 0), QPointF(0.55 * w, h))
 
         if self._logo_pixmap and not self._logo_pixmap.isNull():
@@ -261,16 +177,17 @@ class LoginBackground(QWidget):
             scaled = self._logo_pixmap.scaled(
                 logo_w, logo_h, Qt.KeepAspectRatio, Qt.SmoothTransformation
             )
-            x = int(0.27 * w - scaled.width() / 2)
-            y = int(h / 2 - scaled.height() / 2)
-            painter.drawPixmap(x, y, scaled)
-
+            painter.drawPixmap(
+                int(0.27 * w - scaled.width() / 2),
+                int(h / 2 - scaled.height() / 2),
+                scaled,
+            )
         painter.end()
 
 
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # Main Login Window
-# ---------------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 class LoginWindow(QDialog):
     def __init__(self):
         super().__init__()
@@ -281,7 +198,6 @@ class LoginWindow(QDialog):
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-
         self.bg = LoginBackground(self)
         root.addWidget(self.bg)
 
@@ -297,14 +213,15 @@ class LoginWindow(QDialog):
         self.bg.resize(self.size())
         self._reposition_form()
 
+    # ── Form construction ─────────────────────────────────────────────────
     def _build_form(self):
         self.form_widget = QWidget(self.bg)
         self.form_widget.setAttribute(Qt.WA_TranslucentBackground)
-        self.form_widget.setFixedWidth(280)
+        self.form_widget.setFixedWidth(290)
 
         layout = QVBoxLayout(self.form_widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(14)
+        layout.setSpacing(12)
         layout.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
 
         title = QLabel("Log-In")
@@ -322,9 +239,7 @@ class LoginWindow(QDialog):
             font-size: 13px;
             color: #333;
         }
-        QLineEdit:focus {
-            border: 1px solid #FFD700;
-        }
+        QLineEdit:focus { border: 1px solid #FFD700; }
         """
 
         self.username_edit = QLineEdit()
@@ -341,14 +256,24 @@ class LoginWindow(QDialog):
         self.password_edit.returnPressed.connect(self.authenticate)
         layout.addWidget(self.password_edit)
 
+        # Inline status label — shows lockout/wrong-password messages
+        self.status_lbl = QLabel("")
+        self.status_lbl.setWordWrap(True)
+        self.status_lbl.setAlignment(Qt.AlignCenter)
+        self.status_lbl.setFixedWidth(290)
+        self.status_lbl.setStyleSheet(
+            "color: #c0392b; font-size: 11px; "
+            "background: transparent; padding: 2px;"
+        )
+        layout.addWidget(self.status_lbl)
+
+        # Only "Forgot Password?" — Create Cashier Account removed for security
         links_row = QHBoxLayout()
-        forgot_btn = self._link_button("Forgot Password?")
+        forgot_btn = self._link_btn("Forgot Password?")
         forgot_btn.clicked.connect(self.handle_forgot_password)
-        create_btn = self._link_button("Create Cashier Account")
-        create_btn.clicked.connect(self.show_create_account)
+        links_row.addStretch()
         links_row.addWidget(forgot_btn)
         links_row.addStretch()
-        links_row.addWidget(create_btn)
         layout.addLayout(links_row)
 
         login_btn = QPushButton("Let's Go!")
@@ -362,24 +287,21 @@ class LoginWindow(QDialog):
                 border: none;
                 border-radius: 14px;
             }
-            QPushButton:hover { background-color: #D9BE70; }
+            QPushButton:hover   { background-color: #D9BE70; }
             QPushButton:pressed { background-color: #C9A850; }
         """)
         login_btn.clicked.connect(self.authenticate)
         layout.addWidget(login_btn)
 
-    def _link_button(self, text: str) -> QPushButton:
+    def _link_btn(self, text: str) -> QPushButton:
         btn = QPushButton(text)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setFlat(True)
         btn.setStyleSheet("""
             QPushButton {
-                color: #444;
-                font-size: 11px;
+                color: #444; font-size: 11px;
                 text-decoration: underline;
-                background: transparent;
-                border: none;
-                padding: 0;
+                background: transparent; border: none; padding: 0;
             }
             QPushButton:hover { color: #008000; }
         """)
@@ -387,11 +309,9 @@ class LoginWindow(QDialog):
 
     def _reposition_form(self):
         self.form_widget.adjustSize()
-        w = self.bg.width()
-        h = self.bg.height()
-        right_x = int(0.55 * w)
-        right_w = w - right_x
-        form_x = right_x + (right_w - self.form_widget.width()) // 2
+        w = self.bg.width(); h = self.bg.height()
+        rx = int(0.55 * w)
+        form_x = rx + (w - rx - self.form_widget.width()) // 2
         form_y = (h - self.form_widget.height()) // 2
         self.form_widget.move(form_x, form_y)
 
@@ -403,61 +323,153 @@ class LoginWindow(QDialog):
     def _center_window(self):
         screen = QApplication.primaryScreen().availableGeometry()
         self.move(
-            screen.x() + (screen.width() - self.width()) // 2,
+            screen.x() + (screen.width()  - self.width())  // 2,
             screen.y() + (screen.height() - self.height()) // 2,
         )
 
-    # -------------------------------------------------------------------------
-    # Actions
-    # -------------------------------------------------------------------------
+    # ── Authentication ────────────────────────────────────────────────────
     def authenticate(self):
         username = self.username_edit.text().strip()
         password = self.password_edit.text()
+        self.status_lbl.setText("")
 
         if not username or not password:
-            QMessageBox.critical(self, "Error", "Please enter your username and password.")
+            self.status_lbl.setText("Please enter your username and password.")
             return
 
         try:
-            db = get_db_connection()
+            db  = get_db_connection()
             cur = db.cursor(dictionary=True, buffered=True)
-            cur.execute(
-                "SELECT role FROM users WHERE username = %s AND password_hash = %s",
-                (username, hash_password(password)),
-            )
+            cur.execute("SELECT * FROM users WHERE username = %s", (username,))
             user = cur.fetchone()
-            db.close()
 
-            if user:
-                self.result_data = {"username": username, "role": user["role"]}
-                self.accept()
+            if user is None:
+                # Dummy hash prevents timing-based user enumeration
+                hash_password_pbkdf2(password, gen_salt())
+                log_login(db, username, False, "User not found")
+                db.commit(); db.close()
+                self.status_lbl.setText("Invalid username or password.")
+                return
+
+            uid      = user["id"]
+            now_ts   = int(time.time())
+
+            # ── Lockout check ─────────────────────────────────────────────
+            locked_until = int(user.get("locked_until") or 0)
+            if locked_until > now_ts:
+                remaining = locked_until - now_ts
+                m, s = divmod(remaining, 60)
+                log_login(db, username, False,
+                          f"Account locked ({m}m {s}s remaining)")
+                db.commit(); db.close()
+                self.status_lbl.setText(
+                    f"Account locked. Try again in {m}m {s}s."
+                )
+                return
+
+            # ── Password verification with transparent SHA-256 → PBKDF2 migration ──
+            salt = (user.get("salt") or "").strip()
+            if not salt:
+                # Legacy plain-SHA-256 hash — verify, then upgrade in-place
+                valid = secrets.compare_digest(
+                    hash_password(password), user["password_hash"]
+                )
+                if valid:
+                    new_salt  = gen_salt()
+                    new_hash  = hash_password_pbkdf2(password, new_salt)
+                    cur.execute(
+                        "UPDATE users SET password_hash=%s, salt=%s WHERE id=%s",
+                        (new_hash, new_salt, uid),
+                    )
             else:
-                QMessageBox.critical(self, "Error", "Invalid username or password.")
-        except Exception as err:
-            QMessageBox.critical(self, "Database Connection Error", f"Cannot connect to DB:\n{err}")
+                valid = verify_password(password, user["password_hash"], salt)
 
+            if not valid:
+                failed = int(user.get("failed_attempts") or 0) + 1
+                if failed >= MAX_ATTEMPTS:
+                    lock_ts = now_ts + LOCKOUT_SECS
+                    cur.execute(
+                        "UPDATE users SET failed_attempts=%s, locked_until=%s "
+                        "WHERE id=%s",
+                        (failed, lock_ts, uid),
+                    )
+                    log_login(db, username, False,
+                              "Account locked after max failed attempts")
+                    db.commit(); db.close()
+                    self.status_lbl.setText(
+                        f"Too many failed attempts. "
+                        f"Account locked for {LOCKOUT_SECS // 60} minutes."
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE users SET failed_attempts=%s WHERE id=%s",
+                        (failed, uid),
+                    )
+                    left = MAX_ATTEMPTS - failed
+                    log_login(db, username, False,
+                              f"Wrong password ({failed}/{MAX_ATTEMPTS})")
+                    db.commit(); db.close()
+                    self.status_lbl.setText(
+                        f"Invalid username or password. "
+                        f"{left} attempt{'s' if left != 1 else ''} remaining."
+                    )
+                self.password_edit.clear()
+                return
+
+            # ── Success ───────────────────────────────────────────────────
+            import datetime as _dt
+            session_id = secrets.token_hex(16)
+            now_str    = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            cur.execute(
+                "UPDATE users SET failed_attempts=0, locked_until=0, "
+                "last_login=%s WHERE id=%s",
+                (now_str, uid),
+            )
+            log_login(db, username, True, "Login successful", session_id)
+            start_session(db, uid, username, session_id)
+            audit(db, uid, username, "LOGIN", f"Session {session_id}")
+            db.commit(); db.close()
+
+            self.result_data = {
+                "username":   username,
+                "role":       user["role"],
+                "uid":        uid,
+                "session_id": session_id,
+            }
+            self.accept()
+
+        except Exception as err:
+            QMessageBox.critical(
+                self, "Database Connection Error",
+                f"Cannot connect to DB:\n{err}"
+            )
+
+    # ── Forgot password ───────────────────────────────────────────────────
     def handle_forgot_password(self):
         username = self.username_edit.text().strip()
         if not username:
-            QMessageBox.warning(self, "Warning", "Please enter your username first.")
+            QMessageBox.warning(self, "Warning",
+                                "Please enter your username first.")
             return
         if username.lower() == "admin":
-            QMessageBox.critical(self, "Access Denied", "Admin password cannot be changed via this feature.")
+            QMessageBox.critical(self, "Access Denied",
+                                 "Admin password cannot be reset via this feature.\n"
+                                 "Contact your system administrator.")
             return
         try:
-            db = get_db_connection()
+            db  = get_db_connection()
             cur = db.cursor(dictionary=True)
-            cur.execute("SELECT role FROM users WHERE username = %s", (username,))
+            cur.execute(
+                "SELECT role FROM users WHERE username = %s", (username,)
+            )
             user = cur.fetchone()
             db.close()
             if user and user["role"] == "cashier":
                 dlg = ResetPasswordDialog(username, parent=self)
                 dlg.exec_()
             else:
-                QMessageBox.critical(self, "Error", "User not found or unauthorized.")
+                QMessageBox.critical(self, "Error",
+                                     "User not found or not a cashier account.")
         except Exception as err:
             QMessageBox.critical(self, "Database Error", str(err))
-
-    def show_create_account(self):
-        dlg = CreateAccountDialog(parent=self)
-        dlg.exec_()
