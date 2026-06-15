@@ -13,16 +13,16 @@ INSERT INTO sizes(size_name, multiplier) VALUES
 
 -- Products
 INSERT INTO products(category_id, product_name, base_price, image_path, stock) VALUES
-(1, 'Mango Ice Cream',  35,  'miguelitos_mangoicecream.png',  100),
-(1, 'Hyped Mango',      110, 'miguelitos_hypedmango.png',     100),
-(1, 'Mango Float',      100, 'miguelitos_mangofloat.png',     100),
-(1, 'Mango Juice',      80,  'miguelitos_mangojuice.png',     100),
-(1, 'Mango Shake',      110, 'miguelitos_mangoshake.png',     100),
-(1, 'Mango Supreme',    110, 'miguelitos_mangosupreme.png',   100);
+(1, 'Mango Ice Cream',  35,  'miguelitos_mangoicecream.png',  1),
+(1, 'Hyped Mango',      110, 'miguelitos_hypedmango.png',     1),
+(1, 'Mango Float',      100, 'miguelitos_mangofloat.png',     1),
+(1, 'Mango Juice',      80,  'miguelitos_mangojuice.png',     1),
+(1, 'Mango Shake',      110, 'miguelitos_mangoshake.png',     1),
+(1, 'Mango Supreme',    110, 'miguelitos_mangosupreme.png',   1);
 
 -- Ingredients
 INSERT INTO ingredients(ingredient_name, stock_left, unit, category) VALUES
-('Mango Soft Serve Mix 1kg', 24,  'pcs',   'Soft Serve'),
+('Mango Soft Serve Mix',     20,  'kg',   'Soft Serve'),
 ('Mangoes 16oz Cup',         200, 'pcs',   'Cups'),
 ('Mangoes 12oz Cup',         250, 'pcs',   'Cups'),
 ('Dome Lid for 16oz Cups',   200, 'pcs',   'Lids'),
@@ -33,7 +33,9 @@ INSERT INTO ingredients(ingredient_name, stock_left, unit, category) VALUES
 ('Mango Syrup 1kg Gallon',   5,   'pcs',   'Syrup'),
 ('Mango Juice 1kg Gallon',   7,   'pcs',   'Juice'),
 ('All Purpose Cream',        10,  'pcs',   'Cream'),
-('Condensada',               5,   'pcs',   'Milk');
+('Condensada',               5,   'pcs',   'Milk'),
+('Ice',                      20,  'kg',    'Miscellaneous'),
+('Whipped Cream',            3,   'kg',    'Cream');
 
 -- Sizes
 INSERT INTO product_sizes(product_id, size_id) VALUES

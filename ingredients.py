@@ -474,6 +474,16 @@ class IngredientsPage(QWidget):
         self.table.viewport().installEventFilter(self)
         self.installEventFilter(self)
 
+    # ── auto-refresh on page show ─────────────────────────────────────────────
+
+    def showEvent(self, event):
+        """Reload from DB every time this page becomes visible."""
+        super().showEvent(event)
+        self.action_bar.hide()
+        self.edit_form.hide()
+        self.selected_row = None
+        self.load_from_db()
+
     # ── event filter ──────────────────────────────────────────────────────────
 
     def eventFilter(self, obj, event):

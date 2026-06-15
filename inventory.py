@@ -232,6 +232,7 @@ class ManageIngredientsDialog(QDialog):
         self._center()
 
     def _build(self):
+        self._row_data = []   # list of (link_id, QDoubleSpinBox) for Save All
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -371,6 +372,15 @@ class ManageIngredientsDialog(QDialog):
         fl.setContentsMargins(20, 0, 20, 0)
         fl.addStretch()
 
+        save_all_btn = QPushButton("✔  Save")
+        save_all_btn.setFixedSize(120, 36)
+        save_all_btn.setStyleSheet(GREEN_BTN_STYLE)
+        save_all_btn.clicked.connect(self._save_all)
+        drop_shadow(save_all_btn, blur=8, alpha=80)
+        fl.addWidget(save_all_btn)
+
+        fl.addSpacing(8)
+
         close_btn = QPushButton("Close")
         close_btn.setFixedSize(110, 36)
         close_btn.setStyleSheet(BLUE_BTN_STYLE)
@@ -396,6 +406,7 @@ class ManageIngredientsDialog(QDialog):
             QMessageBox.critical(self, "DB Error", f"Could not load ingredients:\n{err}")
 
     def _load_linked(self):
+        self._row_data = []   # reset tracked rows
         for i in reversed(range(self._list_layout.count())):
             w = self._list_layout.itemAt(i).widget()
             if w:
@@ -467,6 +478,9 @@ class ManageIngredientsDialog(QDialog):
         spin.setStyleSheet(SPIN_STYLE)
         cl.addWidget(spin)
 
+        _lid = row["link_id"]
+        self._row_data.append((_lid, spin))   # track for Save All
+
         save_btn = QPushButton("✔")
         save_btn.setFixedSize(30, 30)
         save_btn.setToolTip("Save amount")
@@ -477,7 +491,6 @@ class ManageIngredientsDialog(QDialog):
             }
             QPushButton:hover { background-color: #166330; }
         """)
-        _lid = row["link_id"]
         save_btn.clicked.connect(lambda _, lid=_lid, s=spin: self._save_amount(lid, s.value()))
         cl.addWidget(save_btn)
 
@@ -530,6 +543,24 @@ class ManageIngredientsDialog(QDialog):
             QMessageBox.information(self, "Saved", "Amount updated.")
         except Exception as err:
             QMessageBox.critical(self, "DB Error", f"Could not update amount:\n{err}")
+
+    def _save_all(self):
+        if not self._row_data:
+            QMessageBox.information(self, "Nothing to Save", "No linked ingredients to save.")
+            return
+        try:
+            db = get_db_connection()
+            cur = db.cursor()
+            for link_id, spin in self._row_data:
+                cur.execute(
+                    "UPDATE product_ingredients SET amount_used = %s WHERE id = %s",
+                    (spin.value(), link_id)
+                )
+            db.commit()
+            db.close()
+            QMessageBox.information(self, "Saved", "All linked ingredient amounts saved.")
+        except Exception as err:
+            QMessageBox.critical(self, "DB Error", f"Could not save amounts:\n{err}")
 
     def _remove_link(self, link_id: int):
         if QMessageBox.question(

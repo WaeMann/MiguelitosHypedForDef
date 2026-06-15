@@ -312,6 +312,8 @@ class ReceiptDialog(QDialog):
         self.order_id    = order_id
         self.order_total = order_total
         self.order_date  = order_date
+        self._drag_pos   = None   # for frameless window dragging
+        self._hdr        = None   # set in _build, used to restrict drag zone
 
         self.setWindowTitle(f"Receipt – Order #{order_id}")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -325,6 +327,27 @@ class ReceiptDialog(QDialog):
         self._build()
         _center_dialog(self)
 
+    # ── Drag-to-move (header bar only) ──────────────────────────────────────
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self._hdr:
+            # Only start drag when the press is inside the header frame
+            if self._hdr.geometry().contains(event.pos()):
+                self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_pos is not None and event.buttons() & Qt.LeftButton:
+            self.move(event.globalPos() - self._drag_pos)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_pos = None
+        super().mouseReleaseEvent(event)
+
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -333,7 +356,8 @@ class ReceiptDialog(QDialog):
         # ── Header bar ──────────────────────────────────────────────────────
         hdr = QFrame()
         hdr.setFixedHeight(52)
-        hdr.setStyleSheet("background-color: #2b2b2b;")
+        hdr.setStyleSheet("background-color: #2b2b2b; cursor: move;")
+        self._hdr = hdr   # keep reference for drag-zone check
         hl = QHBoxLayout(hdr)
         hl.setContentsMargins(16, 0, 16, 0)
         title_lbl = QLabel(f"🧾  Receipt – Order #{self.order_id}")
