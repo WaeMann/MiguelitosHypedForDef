@@ -40,31 +40,33 @@ DevNuts
 **-Fixed/Ignored
 ***-New
 
-* This is not the finished/final product
-** Problem with POS(script.py) not resizing. Will fix after presenting prototype
-** Improve colors and design for inventory
-** Fix buttons,label, and text functions in inventory.
-** Improve REPORT layout and buttons
-* App is not an executable file yet. Would change if needed
-** Add admin/cashier in POS
-** Add security/login window
-** Add Database
-** Remove/keep Login button in inventory window
-** Add ingredients in inventory.
-** FOR THE DATABASE- I've created constant/sample items inside script.py. Remove them from the file then place inside the database you've created.
-** Fix the dang database >:(
-** Separate admin account and cashier account (restrict cashiers from some actions e.g. browse files, add/delete/edit inventory items, daily reports, etc.)
-** Add option to add images to items in inventory
-** Add ingredients window
-** Fix logout. Should go back to login instead of closing itself
-** Add new window. Ingredients manager
-** Add automatic change calculator
-* Add confirmation after clicking "COMPLETE ORDER".
-* (for report) ---- {create dropdown for each} Current: Total revenue (needs weekly), Sales breakdown by item (needs to be divided to daily, weekly), Item sales breakdown (needs to be divided to daily, weekly), Daily sales.
-* Add daily reset/shift for report. (e.g. Start time=07:00 End time=21:00)
-*** Add ice to ingredients
-*! Fix PoS not refreshing after every orders, add, edit, delete, etc.
-** Fix database error in inventory.py. Items not deleting because of foreign key bullsht.
-***Add Login Tracker (Copy from FasterFood)
-***Add Receipts (Copy from FasterFood)
-***Make Login Fullscreen with no border
+*   -This is not the finished/final product
+**  -Problem with POS(script.py) not resizing. Will fix after presenting prototype
+**  -Improve colors and design for inventory
+**  -Fix buttons,label, and text functions in inventory.
+**  -Improve REPORT layout and buttons
+*   -App is not an executable file yet. Would change if needed
+**  -Add admin/cashier in POS
+**  -Add security/login window
+**  -Add Database
+**  -Remove/keep Login button in inventory window
+**  -Add ingredients in inventory.
+**  -FOR THE DATABASE- I've created constant/sample items inside script.py. Remove them from the file then place inside the database you've created.
+**  -Fix the dang database >:(
+**  -Separate admin account and cashier account (restrict cashiers from some actions e.g. browse files, add/delete/edit inventory items, daily reports, etc.)
+**  -Add option to add images to items in inventory
+**  -Add ingredients window
+**  -Fix logout. Should go back to login instead of closing itself
+**  -Add new window. Ingredients manager
+**  -Add automatic change calculator
+*   -Add confirmation after clicking "COMPLETE ORDER".
+*   -(for report) ---- {create dropdown for each} Current: Total revenue (needs weekly), Sales breakdown by item (needs to be divided to daily, weekly), Item sales breakdown (needs to be divided to daily, weekly), Daily sales.
+*   -Add daily reset/shift for report. (e.g. Start time=07:00 End time=21:00)
+**  -Add ice to ingredients
+*!  -Fix PoS not refreshing after every orders, add, edit, delete, etc.
+**  -Fix database error in inventory.py. Items not deleting because of foreign key bullsht.
+*   -Add Login Tracker (Copy from FasterFood)
+**  -Add Receipts (Copy from FasterFood)
+*   -Make Login Fullscreen with no border
+*** -Add income trend analysis (from Birds rep)
+*** -Make every scrollable area draggable
