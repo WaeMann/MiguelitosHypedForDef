@@ -1,3 +1,5 @@
+-This app is for educational purposes only and is not intended for commercial use.
+
 -Most of the parts in the code are labeled to make it easy to find stuff in there,
 if you'd like to change or improve the codes feel free to do as you like.
 
@@ -68,5 +70,7 @@ DevNuts
 *   -Add Login Tracker (Copy from FasterFood)
 **  -Add Receipts (Copy from FasterFood)
 *   -Make Login Fullscreen with no border
-*** -Add income trend analysis (from Birds rep)
+*** -Add income trend analysis (from Birds repo)
 *** -Make every scrollable area draggable
+*** -Add 3 sizes. Sizes editor should show  "12oz, 16oz, 12oz and 16oz"
+*** -Add more security features - Unique session IDs, Logout type tracking, Audit on order placement or user unlock
