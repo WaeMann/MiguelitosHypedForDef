@@ -61,9 +61,9 @@ DevNuts
 **  -Fix logout. Should go back to login instead of closing itself
 **  -Add new window. Ingredients manager
 **  -Add automatic change calculator
-*   -Add confirmation after clicking "COMPLETE ORDER".
-*   -(for report) ---- {create dropdown for each} Current: Total revenue (needs weekly), Sales breakdown by item (needs to be divided to daily, weekly), Item sales breakdown (needs to be divided to daily, weekly), Daily sales.
-*   -Add daily reset/shift for report. (e.g. Start time=07:00 End time=21:00)
+**   -Add confirmation after clicking "COMPLETE ORDER".
+**  -(for report) ---- {create dropdown for each} Current: Total revenue (needs weekly), Sales breakdown by item (needs to be divided to daily, weekly), Item sales breakdown (needs to be divided to daily, weekly), Daily sales.
+**   -Add daily reset/shift for report. (e.g. Start time=07:00 End time=21:00)
 **  -Add ice to ingredients
 *!  -Fix PoS not refreshing after every orders, add, edit, delete, etc.
 **  -Fix database error in inventory.py. Items not deleting because of foreign key bullsht.
