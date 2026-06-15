@@ -227,7 +227,7 @@ def drop_shadow(widget, blur=25, x=3, y=3, alpha=150):
     return fx
 
 
-def _dialog_header(layout, title: str, subtitle: str = ""):
+def _dialog_header(layout, title: str, subtitle: str = "", close_cb=None):
     """Dark/gold header bar used by all admin dialogs."""
     hdr = QFrame()
     hdr.setStyleSheet("background-color: #2b2b2b;")
@@ -247,6 +247,18 @@ def _dialog_header(layout, title: str, subtitle: str = ""):
         col.addWidget(s)
     hl.addLayout(col)
     hl.addStretch()
+    if close_cb is not None:
+        x_btn = QPushButton("✕")
+        x_btn.setFixedSize(28, 28)
+        x_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; color: #E8D28C;
+                border: none; font-size: 14px; font-weight: bold;
+            }
+            QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 6px; }
+        """)
+        x_btn.clicked.connect(close_cb)
+        hl.addWidget(x_btn)
     layout.addWidget(hdr)
     acc = QFrame()
     acc.setFixedHeight(3)
@@ -302,6 +314,7 @@ class ReceiptDialog(QDialog):
         self.order_date  = order_date
 
         self.setWindowTitle(f"Receipt – Order #{order_id}")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setFixedSize(480, 640)
         self.setStyleSheet("""
             QDialog {
@@ -329,6 +342,17 @@ class ReceiptDialog(QDialog):
         )
         hl.addWidget(title_lbl)
         hl.addStretch()
+        close_btn_hdr = QPushButton("✕")
+        close_btn_hdr.setFixedSize(28, 28)
+        close_btn_hdr.setStyleSheet("""
+            QPushButton {
+                background: transparent; color: #E8D28C;
+                border: none; font-size: 14px; font-weight: bold;
+            }
+            QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 6px; }
+        """)
+        close_btn_hdr.clicked.connect(self.reject)
+        hl.addWidget(close_btn_hdr)
         root.addWidget(hdr)
 
         # Gold accent line
@@ -479,6 +503,7 @@ class OrdersDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Order History")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.resize(820, 560)
         self.setMinimumSize(680, 440)
         self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
@@ -492,7 +517,8 @@ class OrdersDialog(QDialog):
         root.setSpacing(0)
 
         _dialog_header(root, "📋  Order History",
-                       subtitle="Double-click a row to view its receipt")
+                       subtitle="Double-click a row to view its receipt",
+                       close_cb=self.reject)
 
         body = QWidget()
         body.setStyleSheet("background: transparent;")
@@ -602,6 +628,7 @@ class SummaryDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Sales Summary")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setFixedSize(520, 510)
         self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
         self._build()
@@ -614,7 +641,8 @@ class SummaryDialog(QDialog):
         root.setSpacing(0)
 
         _dialog_header(root, "📊  Sales Summary",
-                       subtitle="Today's performance at a glance")
+                       subtitle="Today's performance at a glance",
+                       close_cb=self.reject)
 
         body = QWidget()
         body.setStyleSheet("background: transparent;")
@@ -776,6 +804,7 @@ class AddUserDialog(QDialog):
         super().__init__(parent)
         self.created = False
         self.setWindowTitle("Add New User")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setFixedSize(420, 380)
         self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
         self._build()
@@ -786,7 +815,7 @@ class AddUserDialog(QDialog):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        _dialog_header(root, "➕  Add New User")
+        _dialog_header(root, "➕  Add New User", close_cb=self.reject)
 
         body = QWidget()
         body.setStyleSheet("background: transparent;")
@@ -905,6 +934,7 @@ class ResetPasswordDialog(QDialog):
         self.user_id  = user_id
         self.username = username
         self.setWindowTitle("Reset Password")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setFixedSize(420, 320)
         self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
         self._build()
@@ -916,7 +946,8 @@ class ResetPasswordDialog(QDialog):
         root.setSpacing(0)
 
         _dialog_header(root, "🔑  Reset Password",
-                       subtitle=f"Account: {self.username}")
+                       subtitle=f"Account: {self.username}",
+                       close_cb=self.reject)
 
         body = QWidget()
         body.setStyleSheet("background: transparent;")
@@ -1020,6 +1051,7 @@ class UsersDialog(QDialog):
         super().__init__(parent)
         self.current_username = current_username
         self.setWindowTitle("Manage Users")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.resize(880, 540)
         self.setMinimumSize(720, 440)
         self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
@@ -1033,7 +1065,8 @@ class UsersDialog(QDialog):
         root.setSpacing(0)
 
         _dialog_header(root, "👤  Manage Users",
-                       subtitle="Add, reset passwords, change roles, or delete accounts")
+                       subtitle="Add, reset passwords, change roles, or delete accounts",
+                       close_cb=self.reject)
 
         body = QWidget()
         body.setStyleSheet("background: transparent;")

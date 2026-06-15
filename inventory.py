@@ -224,6 +224,7 @@ class ManageIngredientsDialog(QDialog):
         self.product_name = product_name
 
         self.setWindowTitle(f"Manage Ingredients — {product_name}")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setMinimumSize(680, 540)
         self.setStyleSheet("QDialog { background-color: #EFE9D1; } QLabel { color: #2b2b2b; }")
         self._build()
@@ -250,6 +251,18 @@ class ManageIngredientsDialog(QDialog):
         sub = QLabel("Ingredient Links")
         sub.setStyleSheet("color: #888; font-size: 12px; background: transparent;")
         hl.addWidget(sub)
+
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(28, 28)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; color: #2b2b2b;
+                border: none; font-size: 14px; font-weight: bold;
+            }
+            QPushButton:hover { background: rgba(0,0,0,0.12); border-radius: 6px; }
+        """)
+        close_btn.clicked.connect(self.reject)
+        hl.addWidget(close_btn)
         root.addWidget(header)
 
         sep = QFrame()

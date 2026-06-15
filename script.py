@@ -142,6 +142,7 @@ class PaymentDialog(QDialog):
         self.payment_confirmed = False
 
         self.setWindowTitle("Payment")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.resize(500, 700)  # initial size
         self.setMinimumSize(440, 670)
         self.setStyleSheet("""
@@ -168,6 +169,18 @@ class PaymentDialog(QDialog):
         htitle.setFont(QFont("Segoe UI", 14, QFont.Bold))
         htitle.setStyleSheet("color: #2b2b2b; background: transparent;")
         hl.addWidget(htitle)
+        hl.addStretch()
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(28, 28)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; color: #2b2b2b;
+                border: none; font-size: 14px; font-weight: bold;
+            }
+            QPushButton:hover { background: rgba(0,0,0,0.12); border-radius: 6px; }
+        """)
+        close_btn.clicked.connect(self.reject)
+        hl.addWidget(close_btn)
         root.addWidget(header)
 
         body = QWidget()
@@ -459,6 +472,7 @@ class ReceiptDialog(QDialog):
         self.order_id     = order_id
 
         self.setWindowTitle(f"Receipt – Order #{order_id}")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.resize(480, 640)
         self.setMinimumSize(420, 500)
         self.setStyleSheet("QDialog { background-color: #FFFDF7; }")
@@ -495,6 +509,18 @@ class ReceiptDialog(QDialog):
         """)
         print_btn.clicked.connect(self._print)
         hl.addWidget(print_btn)
+
+        close_btn_hdr = QPushButton("✕")
+        close_btn_hdr.setFixedSize(28, 28)
+        close_btn_hdr.setStyleSheet("""
+            QPushButton {
+                background: transparent; color: #2b2b2b;
+                border: none; font-size: 14px; font-weight: bold;
+            }
+            QPushButton:hover { background: rgba(0,0,0,0.12); border-radius: 6px; }
+        """)
+        close_btn_hdr.clicked.connect(self.reject)
+        hl.addWidget(close_btn_hdr)
 
         root.addWidget(header)
 
