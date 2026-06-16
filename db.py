@@ -12,10 +12,10 @@ except ImportError:
     DB_AVAILABLE = False
 
 # ── Security constants ─────────────────────────────────────────────────────
-PBKDF2_ITERS  = 200_000   # NIST-recommended iteration count
-SALT_BYTES    = 32         # 32 random bytes → 64-char hex string
-MAX_ATTEMPTS  = 5          # failed logins before lockout
-LOCKOUT_SECS  = 300        # 5-minute lockout duration
+PBKDF2_ITERS  = 200_000
+SALT_BYTES    = 32
+MAX_ATTEMPTS  = 5
+LOCKOUT_SECS  = 300
 
 
 def gen_salt() -> str:
@@ -58,7 +58,6 @@ def get_db_connection():
 
 
 # ── Logging / session / audit helpers ────────────────────────────────────
-# Each accepts an open connection so callers can commit in one round-trip.
 
 def log_login(db, username: str, success: bool,
               reason: str = None, session_id: str = None):
