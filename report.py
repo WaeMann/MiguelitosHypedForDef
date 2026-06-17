@@ -6,11 +6,13 @@ from PyQt5.QtWidgets import (
     QPushButton, QFrame, QGridLayout, QGraphicsDropShadowEffect,
     QSizePolicy, QScrollArea, QDialog, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QLineEdit, QComboBox,
-    QCheckBox, QAbstractItemView, QTextEdit
+    QCheckBox, QAbstractItemView, QTextEdit, QDateEdit, QFileDialog,
+    QButtonGroup, QTabWidget
 )
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QDate, QDateTime
 from PyQt5.QtGui import QPixmap, QIcon, QColor
-from datetime import date, timedelta
+from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
+from datetime import date, timedelta, datetime
 
 import matplotlib
 matplotlib.use("Qt5Agg")
@@ -522,16 +524,17 @@ class ReceiptDialog(QDialog):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ORDERS DIALOG
+# ORDERS DIALOG  (enhanced with period filters, date range, export)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class OrdersDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._current_rows = []  # cache loaded rows for export
         self.setWindowTitle("Order History")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
-        self.resize(820, 560)
-        self.setMinimumSize(680, 440)
+        self.resize(900, 620)
+        self.setMinimumSize(720, 480)
         self.setStyleSheet("QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }")
         self._build()
         _center_dialog(self)
@@ -543,7 +546,7 @@ class OrdersDialog(QDialog):
         root.setSpacing(0)
 
         _dialog_header(root, "📋  Order History",
-                       subtitle="Double-click a row to view its receipt",
+                       subtitle="View, filter and export orders by period",
                        close_cb=self.reject)
 
         body = QWidget()
@@ -553,14 +556,111 @@ class OrdersDialog(QDialog):
         bl.setSpacing(10)
         root.addWidget(body, stretch=1)
 
-        # Toolbar
+        # ── Period filter row ─────────────────────────────────────────────────
+        period_row = QHBoxLayout()
+        period_row.setSpacing(6)
+
+        period_lbl = QLabel("Filter:")
+        period_lbl.setStyleSheet("color:#555; font-size:12px; font-weight:bold; background:transparent;")
+        period_row.addWidget(period_lbl)
+
+        self._period_btns = {}
+        self._active_period = "all"
+
+        PERIOD_BTN_BASE = """
+            QPushButton {{
+                background-color: {bg};
+                color: {fg};
+                font-size: 12px;
+                border-radius: 6px;
+                font-weight: bold;
+                border: 1px solid #c8b87a;
+                padding: 4px 12px;
+            }}
+            QPushButton:hover {{ background-color: #D9BE70; color: #222; }}
+        """
+        for key, label in [("all","All"), ("daily","Today"), ("weekly","This Week"), ("monthly","This Month"), ("custom","Custom…")]:
+            is_active = key == "all"
+            btn = QPushButton(label)
+            btn.setFixedHeight(30)
+            btn.setCheckable(True)
+            btn.setChecked(is_active)
+            btn.setStyleSheet(PERIOD_BTN_BASE.format(
+                bg="#E8D28C" if is_active else "white",
+                fg="#222" if is_active else "#555"
+            ))
+            btn.clicked.connect(lambda checked, k=key: self._set_period(k))
+            self._period_btns[key] = btn
+            period_row.addWidget(btn)
+
+        period_row.addStretch()
+
+        # Export buttons
+        pdf_btn = QPushButton("📄 Save PDF")
+        pdf_btn.setStyleSheet(BLUE_BTN_STYLE)
+        pdf_btn.setFixedHeight(30)
+        pdf_btn.clicked.connect(self._export_pdf)
+        period_row.addWidget(pdf_btn)
+
+        print_btn = QPushButton("🖨 Print")
+        print_btn.setStyleSheet(GREEN_BTN_STYLE)
+        print_btn.setFixedHeight(30)
+        print_btn.clicked.connect(self._print_report)
+        period_row.addWidget(print_btn)
+
+        bl.addLayout(period_row)
+
+        # ── Custom date range row (hidden by default) ─────────────────────────
+        self._custom_row = QFrame()
+        self._custom_row.setStyleSheet("QFrame { background: #f5f0e0; border-radius: 8px; border: 1px solid #c8b87a; }")
+        self._custom_row.setFixedHeight(50)
+        cr = QHBoxLayout(self._custom_row)
+        cr.setContentsMargins(14, 0, 14, 0)
+        cr.setSpacing(10)
+
+        from_lbl = QLabel("From:")
+        from_lbl.setStyleSheet("background:transparent; font-size:12px; color:#555;")
+        self._from_date = QDateEdit()
+        self._from_date.setCalendarPopup(True)
+        self._from_date.setDate(QDate.currentDate().addDays(-6))
+        self._from_date.setFixedHeight(30)
+        self._from_date.setStyleSheet(INPUT_STYLE)
+        self._from_date.setDisplayFormat("yyyy-MM-dd")
+
+        to_lbl = QLabel("To:")
+        to_lbl.setStyleSheet("background:transparent; font-size:12px; color:#555;")
+        self._to_date = QDateEdit()
+        self._to_date.setCalendarPopup(True)
+        self._to_date.setDate(QDate.currentDate())
+        self._to_date.setFixedHeight(30)
+        self._to_date.setStyleSheet(INPUT_STYLE)
+        self._to_date.setDisplayFormat("yyyy-MM-dd")
+
+        apply_btn = QPushButton("Apply")
+        apply_btn.setStyleSheet(ADMIN_BTN_STYLE)
+        apply_btn.setFixedHeight(30)
+        apply_btn.clicked.connect(self._load)
+
+        cr.addWidget(from_lbl)
+        cr.addWidget(self._from_date)
+        cr.addWidget(to_lbl)
+        cr.addWidget(self._to_date)
+        cr.addWidget(apply_btn)
+        cr.addStretch()
+        self._custom_row.setVisible(False)
+        bl.addWidget(self._custom_row)
+
+        # ── Toolbar (count, refresh) ──────────────────────────────────────────
         tb = QHBoxLayout()
         self._count_lbl = QLabel("Loading…")
-        self._count_lbl.setStyleSheet(
-            "color: #888; font-size: 12px; background: transparent;"
-        )
+        self._count_lbl.setStyleSheet("color:#888; font-size:12px; background:transparent;")
         tb.addWidget(self._count_lbl)
         tb.addStretch()
+
+        self._total_lbl = QLabel("")
+        self._total_lbl.setStyleSheet("color:#2b2b2b; font-size:13px; font-weight:bold; background:transparent;")
+        tb.addWidget(self._total_lbl)
+
         refresh_btn = QPushButton("🔄  Refresh")
         refresh_btn.setStyleSheet(ADMIN_BTN_STYLE)
         refresh_btn.setFixedHeight(34)
@@ -568,13 +668,11 @@ class OrdersDialog(QDialog):
         tb.addWidget(refresh_btn)
         bl.addLayout(tb)
 
-        # Table
+        # ── Orders table ─────────────────────────────────────────────────────
         self._table = QTableWidget()
         self._table.setStyleSheet(TABLE_STYLE)
         self._table.setColumnCount(4)
-        self._table.setHorizontalHeaderLabels(
-            ["Order ID", "Date / Time", "# Items", "Total"]
-        )
+        self._table.setHorizontalHeaderLabels(["Order ID", "Date / Time", "# Items", "Total"])
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self._table.setColumnWidth(0, 90)
         self._table.setColumnWidth(2, 80)
@@ -589,25 +687,81 @@ class OrdersDialog(QDialog):
         bl.addWidget(self._table)
 
         hint = QLabel("Double-click any row to view its receipt.")
-        hint.setStyleSheet("color: #bbb; font-size: 11px; background: transparent;")
+        hint.setStyleSheet("color:#bbb; font-size:11px; background:transparent;")
         hint.setAlignment(Qt.AlignCenter)
         bl.addWidget(hint)
+
+    def _set_period(self, key: str):
+        self._active_period = key
+        PERIOD_BTN_BASE = """
+            QPushButton {{
+                background-color: {bg};
+                color: {fg};
+                font-size: 12px;
+                border-radius: 6px;
+                font-weight: bold;
+                border: 1px solid #c8b87a;
+                padding: 4px 12px;
+            }}
+            QPushButton:hover {{ background-color: #D9BE70; color: #222; }}
+        """
+        for k, btn in self._period_btns.items():
+            is_active = (k == key)
+            btn.setChecked(is_active)
+            btn.setStyleSheet(PERIOD_BTN_BASE.format(
+                bg="#E8D28C" if is_active else "white",
+                fg="#222" if is_active else "#555"
+            ))
+        self._custom_row.setVisible(key == "custom")
+        if key != "custom":
+            self._load()
+
+    def _get_date_range(self):
+        """Return (start_str, end_str) for the active period, or None for all."""
+        today = date.today()
+        if self._active_period == "daily":
+            return today.isoformat(), today.isoformat()
+        elif self._active_period == "weekly":
+            start = today - timedelta(days=today.weekday())
+            return start.isoformat(), today.isoformat()
+        elif self._active_period == "monthly":
+            start = today.replace(day=1)
+            return start.isoformat(), today.isoformat()
+        elif self._active_period == "custom":
+            f = self._from_date.date().toPyDate()
+            t = self._to_date.date().toPyDate()
+            return f.isoformat(), t.isoformat()
+        return None, None  # all
 
     def _load(self):
         self._table.setRowCount(0)
         self._count_lbl.setText("Loading…")
+        self._total_lbl.setText("")
+        start_str, end_str = self._get_date_range()
+
         try:
             db  = get_db_connection()
             cur = db.cursor(dictionary=True)
-            cur.execute("""
-                SELECT o.id, o.total, o.created_at,
-                       COALESCE(COUNT(oi.id), 0) AS item_count
-                FROM orders o
-                LEFT JOIN order_items oi ON oi.order_id = o.id
-                GROUP BY o.id
-                ORDER BY o.id DESC
-                LIMIT 500
-            """)
+            if start_str:
+                cur.execute("""
+                    SELECT o.id, o.total, o.created_at,
+                           COALESCE(COUNT(oi.id), 0) AS item_count
+                    FROM orders o
+                    LEFT JOIN order_items oi ON oi.order_id = o.id
+                    WHERE DATE(o.created_at) BETWEEN %s AND %s
+                    GROUP BY o.id
+                    ORDER BY o.id DESC
+                """, (start_str, end_str))
+            else:
+                cur.execute("""
+                    SELECT o.id, o.total, o.created_at,
+                           COALESCE(COUNT(oi.id), 0) AS item_count
+                    FROM orders o
+                    LEFT JOIN order_items oi ON oi.order_id = o.id
+                    GROUP BY o.id
+                    ORDER BY o.id DESC
+                    LIMIT 1000
+                """)
             rows = cur.fetchall()
             db.close()
         except Exception as err:
@@ -615,23 +769,29 @@ class OrdersDialog(QDialog):
             self._count_lbl.setText("Error loading data.")
             return
 
+        self._current_rows = rows
+        grand_total = sum(float(r["total"]) for r in rows)
         self._table.setRowCount(len(rows))
+
         for r, row in enumerate(rows):
             id_item = QTableWidgetItem(str(row["id"]))
             id_item.setTextAlignment(Qt.AlignCenter)
             self._table.setItem(r, 0, id_item)
-
             self._table.setItem(r, 1, QTableWidgetItem(str(row["created_at"])))
-
             cnt_item = QTableWidgetItem(str(row["item_count"] or 0))
             cnt_item.setTextAlignment(Qt.AlignCenter)
             self._table.setItem(r, 2, cnt_item)
-
             total_item = QTableWidgetItem(f"₱{float(row['total']):,.2f}")
             total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
             self._table.setItem(r, 3, total_item)
 
-        self._count_lbl.setText(f"{len(rows)} record(s)")
+        period_label = {
+            "all": "All time", "daily": "Today", "weekly": "This week",
+            "monthly": "This month", "custom": "Custom range"
+        }.get(self._active_period, "")
+        self._count_lbl.setText(f"{len(rows)} record(s)  ·  {period_label}")
+        if rows:
+            self._total_lbl.setText(f"Total: ₱{grand_total:,.2f}")
 
     def _view_detail(self, index):
         r = index.row()
@@ -644,6 +804,96 @@ class OrdersDialog(QDialog):
             total = 0.0
         dlg = ReceiptDialog(order_id, total, order_date, parent=self)
         dlg.exec_()
+
+    # ── Export helpers ────────────────────────────────────────────────────────
+
+    def _build_report_text(self) -> str:
+        """Build a plain-text report string for printing/PDF."""
+        rows = self._current_rows
+        period_label = {
+            "all": "All Time", "daily": "Today", "weekly": "This Week",
+            "monthly": "This Month", "custom": "Custom Range"
+        }.get(self._active_period, "")
+        start_str, end_str = self._get_date_range()
+        date_range_info = f"{start_str}  to  {end_str}" if start_str else "All records"
+
+        grand_total = sum(float(r["total"]) for r in rows)
+        lines = []
+        lines.append("═" * 60)
+        lines.append(f"  {STORE_INFO['name']}  —  {STORE_INFO['branch']}")
+        lines.append(f"  {STORE_INFO['address']}")
+        lines.append("═" * 60)
+        lines.append(f"  ORDER HISTORY REPORT  ({period_label})")
+        lines.append(f"  Period: {date_range_info}")
+        lines.append(f"  Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append("─" * 60)
+        lines.append(f"  {'Order ID':<12} {'Date / Time':<25} {'Items':>5} {'Total':>12}")
+        lines.append("─" * 60)
+        for row in rows:
+            oid  = str(row["id"])
+            dt   = str(row["created_at"])[:19]
+            cnt  = str(row["item_count"] or 0)
+            tot  = f"₱{float(row['total']):>10,.2f}"
+            lines.append(f"  {oid:<12} {dt:<25} {cnt:>5} {tot:>12}")
+        lines.append("─" * 60)
+        lines.append(f"  {'TOTAL ORDERS:':<38} {len(rows):>5}")
+        lines.append(f"  {'GRAND TOTAL REVENUE:':<38} ₱{grand_total:>9,.2f}")
+        lines.append("═" * 60)
+        return "\n".join(lines)
+
+    def _export_pdf(self):
+        """Save a PDF copy of the current order report."""
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Report as PDF", f"orders_report_{date.today().isoformat()}.pdf",
+            "PDF Files (*.pdf)"
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".pdf"):
+            path += ".pdf"
+
+        printer = QPrinter(QPrinter.HighResolution)
+        printer.setOutputFormat(QPrinter.PdfFormat)
+        printer.setOutputFileName(path)
+        printer.setPageMargins(15, 15, 15, 15, QPrinter.Millimeter)
+        self._do_print(printer)
+        QMessageBox.information(self, "PDF Saved", f"Report saved to:\n{path}")
+
+    def _print_report(self):
+        """Send the current order report to the system printer."""
+        printer = QPrinter(QPrinter.HighResolution)
+        dlg = QPrintDialog(printer, self)
+        if dlg.exec_() != QPrintDialog.Accepted:
+            return
+        self._do_print(printer)
+
+    def _do_print(self, printer: QPrinter):
+        from PyQt5.QtGui import QPainter, QFont, QFontMetrics
+        painter = QPainter()
+        if not painter.begin(printer):
+            QMessageBox.critical(self, "Print Error", "Could not start printer.")
+            return
+
+        report_text = self._build_report_text()
+        font = QFont("Courier New", 9)
+        painter.setFont(font)
+        fm = QFontMetrics(font)
+        line_height = fm.height() + 2
+        page_rect = printer.pageRect()
+        margin = 40
+        x = margin
+        y = margin
+        max_y = page_rect.height() - margin
+
+        for line in report_text.split("\n"):
+            if y + line_height > max_y:
+                printer.newPage()
+                y = margin
+            painter.drawText(x, y + fm.ascent(), line)
+            y += line_height
+
+        painter.end()
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1375,6 +1625,7 @@ class ReportPage(QWidget):
         self.role        = role
         self.sales_data  = {}
         self.daily_sales = {}
+        self._page_period = "all"   # "daily", "weekly", "monthly", "all"
 
         self.setWindowTitle("Hyped Mangoes — Reports")
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
@@ -1387,27 +1638,45 @@ class ReportPage(QWidget):
 
     # ── DB LOAD ──────────────────────────────────────────────────────────────
 
-    def _load_from_db(self):
-        """Load all past orders from DB to pre-populate charts."""
+    def _load_from_db(self, start_date: str = None, end_date: str = None):
+        """Load sales data from DB for the given date range (or all time)."""
         try:
             db  = get_db_connection()
             cur = db.cursor(dictionary=True)
 
-            cur.execute("""
-                SELECT oi.product_name, SUM(oi.item_price) AS total
-                FROM order_items oi
-                GROUP BY oi.product_name
-            """)
+            if start_date:
+                cur.execute("""
+                    SELECT oi.product_name, SUM(oi.item_price) AS total
+                    FROM order_items oi
+                    JOIN orders o ON o.id = oi.order_id
+                    WHERE DATE(o.created_at) BETWEEN %s AND %s
+                    GROUP BY oi.product_name
+                """, (start_date, end_date))
+            else:
+                cur.execute("""
+                    SELECT oi.product_name, SUM(oi.item_price) AS total
+                    FROM order_items oi
+                    GROUP BY oi.product_name
+                """)
             for row in cur.fetchall():
                 name = row["product_name"] or "Unknown"
                 self.sales_data[name] = self.sales_data.get(name, 0) + float(row["total"])
 
-            cur.execute("""
-                SELECT DATE(created_at) AS day, SUM(total) AS day_total
-                FROM orders
-                GROUP BY DATE(created_at)
-                ORDER BY day
-            """)
+            if start_date:
+                cur.execute("""
+                    SELECT DATE(created_at) AS day, SUM(total) AS day_total
+                    FROM orders
+                    WHERE DATE(created_at) BETWEEN %s AND %s
+                    GROUP BY DATE(created_at)
+                    ORDER BY day
+                """, (start_date, end_date))
+            else:
+                cur.execute("""
+                    SELECT DATE(created_at) AS day, SUM(total) AS day_total
+                    FROM orders
+                    GROUP BY DATE(created_at)
+                    ORDER BY day
+                """)
             for row in cur.fetchall():
                 day_str = str(row["day"])
                 self.daily_sales[day_str] = (
@@ -1499,6 +1768,54 @@ class ReportPage(QWidget):
         scroll_area.setWidget(content_area)
         root.addWidget(scroll_area, stretch=1)
 
+        # ── PERIOD FILTER BUTTONS ─────────────────────────────────────────────
+        period_filter_panel = QFrame()
+        period_filter_panel.setStyleSheet(
+            "QFrame { background-color: #EFE9D1; border-radius: 0px; }"
+        )
+        period_filter_panel.setFixedHeight(48)
+        pfl = QHBoxLayout(period_filter_panel)
+        pfl.setContentsMargins(0, 6, 0, 6)
+        pfl.setSpacing(8)
+
+        filter_lbl = QLabel("View:")
+        filter_lbl.setStyleSheet(
+            "font-size: 12px; color: #555; font-weight: bold; background: transparent;"
+        )
+        pfl.addWidget(filter_lbl)
+
+        PSTYLE_ACTIVE = """
+            QPushButton {
+                background-color: #2b2b2b; color: #E8D28C;
+                font-size: 12px; border-radius: 6px; font-weight: bold;
+                border: none; padding: 4px 16px;
+            }
+        """
+        PSTYLE_INACTIVE = """
+            QPushButton {
+                background-color: #EFE9D1; color: #2b2b2b;
+                font-size: 12px; border-radius: 6px; font-weight: bold;
+                border: 1px solid #c8b87a; padding: 4px 16px;
+            }
+            QPushButton:hover { background-color: #E8D28C; }
+        """
+        self._page_period_btns = {}
+        for period_key, period_label in [
+            ("all",     "All Time"),
+            ("daily",   "Today"),
+            ("weekly",  "This Week"),
+            ("monthly", "This Month"),
+        ]:
+            btn = QPushButton(period_label)
+            btn.setFixedHeight(32)
+            btn.setStyleSheet(PSTYLE_ACTIVE if period_key == "all" else PSTYLE_INACTIVE)
+            btn.clicked.connect(lambda checked, k=period_key: self._set_page_period(k))
+            self._page_period_btns[period_key] = btn
+            pfl.addWidget(btn)
+
+        pfl.addStretch()
+        content_grid.addWidget(period_filter_panel, 0, 0, 1, 2)
+
         # ── TOTAL SALES CARD ─────────────────────────────────────────────────
         self.total_card = self._make_panel()
         self.total_card.setFixedHeight(120)
@@ -1507,8 +1824,8 @@ class ReportPage(QWidget):
         total_inner.setContentsMargins(24, 16, 24, 16)
 
         left_col = QVBoxLayout()
-        card_title = QLabel("TOTAL REVENUE")
-        card_title.setStyleSheet(
+        self._period_title_lbl = QLabel("TOTAL REVENUE  (All Time)")
+        self._period_title_lbl.setStyleSheet(
             "font-size: 11px; font-weight: bold; color: #888; "
             "letter-spacing: 2px; background: transparent;"
         )
@@ -1516,7 +1833,7 @@ class ReportPage(QWidget):
         self.total_value.setStyleSheet(
             "font-size: 36px; font-weight: bold; color: #2b2b2b; background: transparent;"
         )
-        left_col.addWidget(card_title)
+        left_col.addWidget(self._period_title_lbl)
         left_col.addWidget(self.total_value)
         total_inner.addLayout(left_col)
         total_inner.addStretch()
@@ -1526,7 +1843,7 @@ class ReportPage(QWidget):
             "font-size: 52px; color: #E8D28C; font-weight: bold; background: transparent;"
         )
         total_inner.addWidget(icon_lbl)
-        content_grid.addWidget(self.total_card, 0, 0, 1, 2)
+        content_grid.addWidget(self.total_card, 1, 0, 1, 2)
 
         # ── PIE CHART PANEL ──────────────────────────────────────────────────
         pie_panel = self._make_panel()
@@ -1545,7 +1862,7 @@ class ReportPage(QWidget):
         self.pie_canvas.setMinimumHeight(320)
         self.pie_canvas.setStyleSheet("border-radius: 8px;")
         pie_layout.addWidget(self.pie_canvas)
-        content_grid.addWidget(pie_panel, 1, 0)
+        content_grid.addWidget(pie_panel, 2, 0)
         pie_panel.setMinimumHeight(420)
 
         # ── TRACKER PANEL ────────────────────────────────────────────────────
@@ -1576,26 +1893,7 @@ class ReportPage(QWidget):
         self.tracker_layout.setAlignment(Qt.AlignTop)
         scroll.setWidget(scroll_content)
         tracker_outer.addWidget(scroll, stretch=1)
-        content_grid.addWidget(tracker_panel, 1, 1)
-
-        # ── BAR CHART PANEL ──────────────────────────────────────────────────
-        bar_panel = self._make_panel()
-        bar_panel.setFixedHeight(280)
-        drop_shadow(bar_panel, blur=25, alpha=110)
-        bar_layout = QVBoxLayout(bar_panel)
-        bar_layout.setContentsMargins(16, 14, 16, 14)
-        bar_layout.setSpacing(8)
-
-        bar_title = QLabel("Daily Sales")
-        bar_title.setStyleSheet(
-            "font-size: 16px; font-weight: bold; color: #2b2b2b; background: transparent;"
-        )
-        bar_layout.addWidget(bar_title)
-
-        self.bar_canvas = FigureCanvas(Figure(figsize=(8, 2.4), facecolor="#FFFFFF"))
-        self.bar_canvas.setStyleSheet("border-radius: 8px;")
-        bar_layout.addWidget(self.bar_canvas)
-        content_grid.addWidget(bar_panel, 2, 0, 1, 2)
+        content_grid.addWidget(tracker_panel, 2, 1)
 
         content_grid.setColumnStretch(0, 1)
         content_grid.setColumnStretch(1, 1)
@@ -1780,17 +2078,53 @@ class ReportPage(QWidget):
         self.daily_sales[today] = self.daily_sales.get(today, 0) + total
         self.refresh_report()
 
+    def _get_page_period_range(self):
+        """Return (start_str, end_str) for the current page period, or (None, None) for all."""
+        today = date.today()
+        if self._page_period == "daily":
+            return today.isoformat(), today.isoformat()
+        elif self._page_period == "weekly":
+            start = today - timedelta(days=today.weekday())
+            return start.isoformat(), today.isoformat()
+        elif self._page_period == "monthly":
+            start = today.replace(day=1)
+            return start.isoformat(), today.isoformat()
+        return None, None  # all
+
+    def _set_page_period(self, period: str):
+        """Switch the whole-page period filter and reload."""
+        self._page_period = period
+        # Update period button styles
+        PSTYLE_ACTIVE = """
+            QPushButton {
+                background-color: #2b2b2b; color: #E8D28C;
+                font-size: 12px; border-radius: 6px; font-weight: bold;
+                border: none; padding: 4px 16px;
+            }
+        """
+        PSTYLE_INACTIVE = """
+            QPushButton {
+                background-color: #EFE9D1; color: #2b2b2b;
+                font-size: 12px; border-radius: 6px; font-weight: bold;
+                border: 1px solid #c8b87a; padding: 4px 16px;
+            }
+            QPushButton:hover { background-color: #E8D28C; }
+        """
+        for p, btn in self._page_period_btns.items():
+            btn.setStyleSheet(PSTYLE_ACTIVE if p == period else PSTYLE_INACTIVE)
+        self.reload_from_db_and_refresh()
+
     def reload_from_db_and_refresh(self):
-        """Reload all sales data fresh from DB, then re-render all charts."""
+        """Reload all sales data fresh from DB using the current period, then re-render."""
         self.sales_data  = {}
         self.daily_sales = {}
-        self._load_from_db()
+        start_str, end_str = self._get_page_period_range()
+        self._load_from_db(start_str, end_str)
         self.refresh_report()
         self._load_and_plot()
 
     def refresh_report(self):
         self.plot_pie()
-        self.plot_bar()
         self.update_tracker()
 
     # ── TRACKER ──────────────────────────────────────────────────────────────

@@ -65,12 +65,12 @@ DevNuts
 **  -(for report) ---- {create dropdown for each} Current: Total revenue (needs weekly), Sales breakdown by item (needs to be divided to daily, weekly), Item sales breakdown (needs to be divided to daily, weekly), Daily sales.
 **   -Add daily reset/shift for report. (e.g. Start time=07:00 End time=21:00)
 **  -Add ice to ingredients
-*!  -Fix PoS not refreshing after every orders, add, edit, delete, etc.
+**  -Fix PoS not refreshing after every orders, add, edit, delete, etc.
 **  -Fix database error in inventory.py. Items not deleting because of foreign key bullsht.
 *   -Add Login Tracker (Copy from FasterFood)
 **  -Add Receipts (Copy from FasterFood)
 *   -Make Login Fullscreen with no border
-*** -Add income trend analysis (from Birds repo)
+** -Add income trend analysis (from Birds repo)
 *** -Make every scrollable area draggable
 *** -Add 3 sizes. Sizes editor should show  "12oz, 16oz, 12oz and 16oz"
 *** -Add more security features - Unique session IDs, Logout type tracking, Audit on order placement or user unlock
