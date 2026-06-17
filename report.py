@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QSize
 from PyQt5.QtGui import QPixmap, QIcon, QColor
-from datetime import date
+from datetime import date, timedelta
 
 import matplotlib
 matplotlib.use("Qt5Agg")
@@ -1383,6 +1383,7 @@ class ReportPage(QWidget):
         self._build_ui()
         self._load_from_db()
         self.refresh_report()
+        self._load_and_plot()
 
     # ── DB LOAD ──────────────────────────────────────────────────────────────
 
@@ -1599,6 +1600,101 @@ class ReportPage(QWidget):
         content_grid.setColumnStretch(0, 1)
         content_grid.setColumnStretch(1, 1)
 
+        # ── INCOME TRENDS SECTION ────────────────────────────────────────────
+        trends_sep = QLabel("INCOME TRENDS")
+        trends_sep.setStyleSheet(
+            "font-size: 11px; font-weight: bold; color: #888; "
+            "letter-spacing: 3px; background: transparent; padding: 8px 0 4px 0;"
+        )
+        content_grid.addWidget(trends_sep, 3, 0, 1, 2)
+
+        # Controls row
+        it_controls_panel = self._make_panel()
+        drop_shadow(it_controls_panel, blur=25, alpha=110)
+        it_controls_panel.setFixedHeight(92)
+        it_controls_layout = QHBoxLayout(it_controls_panel)
+        it_controls_layout.setContentsMargins(18, 14, 18, 14)
+        it_controls_layout.setSpacing(14)
+
+        it_title = QLabel("INCOME TREND ANALYSIS")
+        it_title.setStyleSheet("font-size: 18px; font-weight: bold; color: #2b2b2b; background: transparent;")
+        it_controls_layout.addWidget(it_title)
+        it_controls_layout.addStretch(1)
+
+        self.range_combo = QComboBox()
+        self.range_combo.addItems([
+            "Last 7 days",
+            "Last 30 days",
+            "Last 90 days",
+            "Custom (last 180 days)",
+        ])
+        self.range_combo.setFixedHeight(36)
+        self.range_combo.setStyleSheet(
+            "QComboBox { background-color: white; border: 2px solid #d6d2c4; border-radius: 10px; padding: 4px 10px; font-size: 13px; color: #2c3e50; }"
+            "QComboBox:focus { border: 2px solid #34699A; }"
+            "QComboBox QAbstractItemView { background-color: white; selection-background-color: #34699A; selection-color: white; }"
+        )
+
+        self.ma_combo = QComboBox()
+        self.ma_combo.addItems([
+            "No moving average",
+            "3-day moving average",
+            "7-day moving average",
+        ])
+        self.ma_combo.setFixedHeight(36)
+        self.ma_combo.setStyleSheet(
+            "QComboBox { background-color: white; border: 2px solid #d6d2c4; border-radius: 10px; padding: 4px 10px; font-size: 13px; color: #2c3e50; }"
+            "QComboBox:focus { border: 2px solid #34699A; }"
+            "QComboBox QAbstractItemView { background-color: white; selection-background-color: #34699A; selection-color: white; }"
+        )
+
+        range_lbl = QLabel("Range:")
+        range_lbl.setStyleSheet("background: transparent;")
+        ma_lbl = QLabel("MA:")
+        ma_lbl.setStyleSheet("background: transparent;")
+        it_controls_layout.addWidget(range_lbl)
+        it_controls_layout.addWidget(self.range_combo)
+        it_controls_layout.addWidget(ma_lbl)
+        it_controls_layout.addWidget(self.ma_combo)
+
+        content_grid.addWidget(it_controls_panel, 4, 0, 1, 2)
+
+        # Line chart panel
+        line_panel = self._make_panel()
+        drop_shadow(line_panel, blur=25, alpha=110)
+        line_panel.setMinimumHeight(420)
+        line_layout = QVBoxLayout(line_panel)
+        line_layout.setContentsMargins(16, 14, 16, 14)
+        line_layout.setSpacing(8)
+
+        line_title_lbl = QLabel("Daily Income")
+        line_title_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #2b2b2b; background: transparent;")
+        line_layout.addWidget(line_title_lbl)
+
+        self.line_canvas = FigureCanvas(Figure(figsize=(9, 3.8), facecolor="#FFFFFF"))
+        self.line_canvas.setStyleSheet("border-radius: 8px;")
+        line_layout.addWidget(self.line_canvas)
+
+        content_grid.addWidget(line_panel, 5, 0)
+
+        # Monthly bar chart panel
+        monthly_panel = self._make_panel()
+        drop_shadow(monthly_panel, blur=25, alpha=110)
+        monthly_panel.setMinimumHeight(420)
+        monthly_layout = QVBoxLayout(monthly_panel)
+        monthly_layout.setContentsMargins(16, 14, 16, 14)
+        monthly_layout.setSpacing(8)
+
+        monthly_title_lbl = QLabel("Monthly Income (last 12 months)")
+        monthly_title_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: #2b2b2b; background: transparent;")
+        monthly_layout.addWidget(monthly_title_lbl)
+
+        self.monthly_canvas = FigureCanvas(Figure(figsize=(6.7, 3.8), facecolor="#FFFFFF"))
+        self.monthly_canvas.setStyleSheet("border-radius: 8px;")
+        monthly_layout.addWidget(self.monthly_canvas)
+
+        content_grid.addWidget(monthly_panel, 5, 1)
+
     # ── ADMIN BAR ────────────────────────────────────────────────────────────
 
     def _build_admin_bar(self, root: QVBoxLayout):
@@ -1690,6 +1786,7 @@ class ReportPage(QWidget):
         self.daily_sales = {}
         self._load_from_db()
         self.refresh_report()
+        self._load_and_plot()
 
     def refresh_report(self):
         self.plot_pie()
@@ -1832,6 +1929,170 @@ class ReportPage(QWidget):
         ax.set_axisbelow(True)
         fig.tight_layout()
         self.bar_canvas.draw()
+
+    # ── INCOME TRENDS METHODS ────────────────────────────────────────────────
+
+    def _get_range_days(self):
+        idx = self.range_combo.currentIndex()
+        if idx == 0:
+            return 7
+        if idx == 1:
+            return 30
+        if idx == 2:
+            return 90
+        return 180
+
+    def _get_ma_window(self):
+        txt = self.ma_combo.currentText()
+        if "3-day" in txt:
+            return 3
+        if "7-day" in txt:
+            return 7
+        return 0
+
+    def _load_and_plot(self):
+        days = self._get_range_days()
+        ma_window = self._get_ma_window()
+
+        end_day = date.today()
+        start_day = end_day - timedelta(days=days - 1)
+
+        daily = {}
+        try:
+            db = get_db_connection()
+            cur = db.cursor(dictionary=True)
+            cur.execute(
+                """
+                SELECT DATE(created_at) AS day, COALESCE(SUM(total), 0) AS day_total
+                FROM orders
+                WHERE created_at >= %s AND created_at < %s
+                GROUP BY DATE(created_at)
+                ORDER BY day
+                """,
+                (start_day.isoformat(), (end_day + timedelta(days=1)).isoformat()),
+            )
+            for row in cur.fetchall():
+                daily[str(row["day"])] = float(row["day_total"])
+            db.close()
+        except Exception as err:
+            print(f"[IncomeTrends] DB load failed: {err}")
+
+        dates = []
+        values = []
+        for i in range(days):
+            d = (start_day + timedelta(days=i)).isoformat()
+            dates.append(d)
+            values.append(daily.get(d, 0.0))
+
+        self._plot_line(dates, values, ma_window)
+        self._plot_monthly()
+
+    def _plot_line(self, dates, values, ma_window):
+        fig = self.line_canvas.figure
+        fig.clear()
+        ax = fig.add_subplot(111)
+        ax.set_facecolor("#FFFFFF")
+        fig.patch.set_facecolor("#FFFFFF")
+
+        if not values or sum(values) == 0:
+            ax.text(0.5, 0.5, "No income recorded yet", ha="center", va="center",
+                    fontsize=13, color="#aaa")
+            ax.axis("off")
+            self.line_canvas.draw()
+            return
+
+        x = list(range(len(dates)))
+        ax.plot(x, values, color="#34699A", linewidth=2.5, marker="o", markersize=3)
+        ax.set_ylabel("Income (₱)")
+
+        if ma_window and len(values) >= ma_window:
+            ma = []
+            for i in range(len(values)):
+                start = max(0, i - ma_window + 1)
+                window = values[start:i + 1]
+                ma.append(sum(window) / len(window) if window else 0)
+            ax.plot(x, ma, color="#b87c0e", linewidth=2.2, linestyle="--")
+
+        step = max(1, len(dates) // 8)
+        ticks = [i for i in range(len(dates)) if i % step == 0 or i == len(dates) - 1]
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([dates[i] for i in ticks], rotation=30, ha="right", fontsize=8)
+
+        ax.grid(True, axis="y", color="#ede9dc", linestyle="--", linewidth=0.8)
+        for spine in ["top", "right"]:
+            ax.spines[spine].set_visible(False)
+
+        fig.tight_layout()
+        self.line_canvas.draw()
+
+    def _plot_monthly(self):
+        monthly = {}
+        today = date.today()
+        start_month = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+        for _ in range(11):
+            start_month = (start_month.replace(day=1) - timedelta(days=1)).replace(day=1)
+
+        try:
+            db = get_db_connection()
+            cur = db.cursor(dictionary=True)
+            cur.execute(
+                """
+                SELECT DATE_FORMAT(created_at, '%%Y-%%m') AS month_key,
+                       COALESCE(SUM(total), 0) AS month_total
+                FROM orders
+                WHERE created_at >= %s
+                GROUP BY DATE_FORMAT(created_at, '%%Y-%%m')
+                ORDER BY month_key
+                """,
+                (start_month.isoformat(),),
+            )
+            for row in cur.fetchall():
+                monthly[str(row["month_key"])] = float(row["month_total"])
+            db.close()
+        except Exception as err:
+            print(f"[IncomeTrends] monthly DB load failed: {err}")
+
+        labels = []
+        vals = []
+        y, m = start_month.year, start_month.month
+        while (y, m) <= (today.year, today.month):
+            key = f"{y:04d}-{m:02d}"
+            labels.append(key)
+            vals.append(monthly.get(key, 0.0))
+            m += 1
+            if m == 13:
+                m = 1
+                y += 1
+
+        fig = self.monthly_canvas.figure
+        fig.clear()
+        ax = fig.add_subplot(111)
+        ax.set_facecolor("#FFFFFF")
+        fig.patch.set_facecolor("#FFFFFF")
+
+        if not vals or sum(vals) == 0:
+            ax.text(0.5, 0.5, "No monthly income yet", ha="center", va="center",
+                    fontsize=13, color="#aaa")
+            ax.axis("off")
+            self.monthly_canvas.draw()
+            return
+
+        x = list(range(len(labels)))
+        ax.bar(x, vals, color="#34699A", edgecolor="white", linewidth=1.2)
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=8)
+        ax.set_ylabel("Income (₱)")
+        ax.grid(True, axis="y", color="#ede9dc", linestyle="--", linewidth=0.8)
+        for spine in ["top", "right"]:
+            ax.spines[spine].set_visible(False)
+
+        maxv = max(vals) if vals else 1
+        for i, v in enumerate(vals):
+            ax.text(i, v + maxv * 0.01, f"₱{v:,.0f}", ha="center", va="bottom",
+                    fontsize=8, color="#2b2b2b", fontweight="bold")
+
+        fig.tight_layout()
+        self.monthly_canvas.draw()
 
 
 if __name__ == "__main__":

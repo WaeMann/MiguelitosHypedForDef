@@ -169,10 +169,13 @@ class IngredientsPage(QWidget):
         self.switch_callback = switch_callback
         self.setWindowTitle("Hyped Mangoes — Ingredients")
         self.selected_row = None
-        self._row_ids = {}   # table row index → DB id
+        self._row_ids = {}
+
+
+        self.on_change = None
 
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
-        # Prevent this page's sizeHint from driving the parent window's size.
+
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.initUI()
         self.load_from_db()
@@ -597,6 +600,8 @@ class IngredientsPage(QWidget):
         self._row_ids[row] = new_id
         self.update_numbers()
         self.clear_inputs()
+        if self.on_change:
+            self.on_change()
 
     # kept for any external callers
     def load_selected_row(self, row, column):
@@ -636,6 +641,8 @@ class IngredientsPage(QWidget):
         self.update_numbers()
         self.action_info.setText(f"Selected:  {name}   |   Stock: {stock}")
         self.edit_form.hide()
+        if self.on_change:
+            self.on_change()
 
     def delete_item(self):
         if self.selected_row is None:
@@ -665,6 +672,8 @@ class IngredientsPage(QWidget):
         self.update_numbers()
         self.action_bar.hide()
         self.edit_form.hide()
+        if self.on_change:
+            self.on_change()
 
     def clear_inputs(self):
         self.name.clear()
