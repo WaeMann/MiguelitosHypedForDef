@@ -78,3 +78,4 @@ only show the 2 sizes.
 (Copy from FasterFood)
 ***!-Ignore 3 sizes.In inventory.py, remove "available sizes" from scroll table, add item, and edit. Change the "description"
 to available sizes(12oz, 16oz)
+***-Fix PDF. WTF is that?!
