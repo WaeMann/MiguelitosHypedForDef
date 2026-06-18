@@ -407,10 +407,14 @@ class ManageIngredientsDialog(QDialog):
 
     def _load_linked(self):
         self._row_data = []   # reset tracked rows
-        for i in reversed(range(self._list_layout.count())):
-            w = self._list_layout.itemAt(i).widget()
-            if w:
-                w.deleteLater()
+        # Properly remove every widget from the layout so no stale spin boxes linger
+        while self._list_layout.count():
+            item = self._list_layout.takeAt(0)
+            if item is not None:
+                w = item.widget()
+                if w:
+                    w.setParent(None)
+                    w.deleteLater()
 
         try:
             db = get_db_connection()
@@ -558,6 +562,8 @@ class ManageIngredientsDialog(QDialog):
                 )
             db.commit()
             db.close()
+            # Reload the list so spin boxes reflect the freshly-saved DB values
+            self._load_linked()
             QMessageBox.information(self, "Saved", "All linked ingredient amounts saved.")
         except Exception as err:
             QMessageBox.critical(self, "DB Error", f"Could not save amounts:\n{err}")
