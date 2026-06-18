@@ -672,7 +672,7 @@ def load_products_from_db():
 
         cur.execute("""
             SELECT p.id, p.product_name, p.base_price, p.image_path, p.stock,
-                   c.category_name
+                   p.description, c.category_name
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             ORDER BY c.category_name, p.product_name
@@ -882,18 +882,6 @@ class IMS(QWidget):
         qty_col.addWidget(qty_lbl)
         qty_col.addWidget(self.combo1)
 
-        size_col = QVBoxLayout()
-        size_col.setSpacing(2)
-        size_lbl = QLabel("SIZE")
-        size_lbl.setAlignment(Qt.AlignCenter)
-        size_lbl.setStyleSheet("color: black; font-size: 10px; background: transparent;")
-        self.combo2 = QComboBox()
-        self.combo2.addItems(self.sizes)
-        self.combo2.setStyleSheet(COMBO_STYLE)
-        self.combo2.currentIndexChanged.connect(self.update_price_display)
-        size_col.addWidget(size_lbl)
-        size_col.addWidget(self.combo2)
-
         self.add_item_btn = QPushButton("ADD ITEM")
         self.add_item_btn.setStyleSheet(BLUE_BTN_STYLE)
         self.add_item_btn.setFixedHeight(40)
@@ -901,7 +889,6 @@ class IMS(QWidget):
         self.add_item_btn.clicked.connect(self.button_clicked)
 
         controls_row.addLayout(qty_col)
-        controls_row.addLayout(size_col)
         controls_row.addWidget(self.add_item_btn, alignment=Qt.AlignBottom)
         yellow_layout.addLayout(controls_row)
 
@@ -1214,11 +1201,7 @@ class IMS(QWidget):
         self.section_grids = []
         self.menu_cards = []
 
-        # Update size combo boxes with latest sizes
-        self.combo2.blockSignals(True)
-        self.combo2.clear()
-        self.combo2.addItems(self.sizes)
-        self.combo2.blockSignals(False)
+        # Update hidden change order bar size combo with latest sizes
         self.bottom_combo2.clear()
         self.bottom_combo2.addItems(self.sizes)
 
@@ -1275,8 +1258,7 @@ class IMS(QWidget):
             return
         product = self.product_map.get(self.selected_item, {})
         base = float(product.get("base_price", 0))
-        size = self.combo2.currentText()
-        final = int(base * self.size_mult.get(size, 1.0))
+        final = int(base)
         self.price_text.setText(f"₱{final}")
 
     def button_clicked(self):
@@ -1285,10 +1267,11 @@ class IMS(QWidget):
 
         product = self.product_map.get(self.selected_item, {})
         qty = int(self.combo1.currentText())
-        size = self.combo2.currentText()
+        # Use the product's description as the size label (e.g. "12oz" or "16oz")
+        size = product.get("description") or ""
 
         base = float(product.get("base_price", 0))
-        unit_price = int(base * self.size_mult.get(size, 1.0))
+        unit_price = int(base)
         added_price = unit_price * qty
 
         # Check if item already exists in order

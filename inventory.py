@@ -609,9 +609,6 @@ class InventoryPage(QWidget):
         # Callback wired by main.py to notify other pages when data changes.
         self.on_change = None
 
-        # Load sizes once for use in both forms
-        self._sizes = load_sizes_from_db()
-
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
         # Prevent this page's sizeHint from driving the parent window's size.
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
@@ -715,9 +712,9 @@ class InventoryPage(QWidget):
         )
         table_panel_layout.addWidget(panel_title)
 
-        self.table = QTableWidget(0, 7)
+        self.table = QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(
-            ["#", "Product Name", "Price", "Qty Left", "Available Sizes", "Category", "Image Path"]
+            ["#", "Product Name", "Price", "Qty Left", "Category", "Image Path"]
         )
         self.table.setStyleSheet(TABLE_STYLE)
         self.table.setAlternatingRowColors(True)
@@ -835,10 +832,10 @@ class InventoryPage(QWidget):
         self.ef_qty.setFixedWidth(90)
         self.ef_qty.setFixedHeight(36)
 
-        # ── Sizes dropdown (edit form) ────────────────────────────────────────
-        self.ef_sizes = QComboBox()
-        self.ef_sizes.addItems(self._sizes)
-        self.ef_sizes.setStyleSheet(COMBO_STYLE)
+        # ── Available Sizes text input (edit form) ───────────────────────────
+        self.ef_sizes = QLineEdit()
+        self.ef_sizes.setPlaceholderText("e.g. 12oz")
+        self.ef_sizes.setStyleSheet(INPUT_STYLE)
         self.ef_sizes.setFixedWidth(130)
         self.ef_sizes.setFixedHeight(36)
 
@@ -947,10 +944,10 @@ class InventoryPage(QWidget):
         self.quantity.setValidator(QIntValidator(0, 999999))
         self.quantity.setStyleSheet(INPUT_STYLE)
 
-        # ── Sizes dropdown (add form) ─────────────────────────────────────────
-        self.expiry = QComboBox()
-        self.expiry.addItems(self._sizes)
-        self.expiry.setStyleSheet(COMBO_STYLE)
+        # ── Available Sizes text input (add form) ─────────────────────────────
+        self.expiry = QLineEdit()
+        self.expiry.setPlaceholderText("e.g. 12oz")
+        self.expiry.setStyleSheet(INPUT_STYLE)
 
         self.type = QLineEdit()
         self.type.setPlaceholderText("e.g. Desserts")
@@ -1042,16 +1039,12 @@ class InventoryPage(QWidget):
         self.ef_name.setText(name)
         self.ef_qty.setText(qty)
 
-        # Set the size combo to match the stored value if possible
-        stored_size = self.table.item(row, 4).text() if self.table.item(row, 4) else ""
-        idx = self.ef_sizes.findText(stored_size)
-        if idx >= 0:
-            self.ef_sizes.setCurrentIndex(idx)
-        else:
-            self.ef_sizes.setCurrentIndex(0)
+        # Set the available sizes text from hidden UserRole data on name cell
+        stored_desc = self.table.item(row, 1).data(Qt.UserRole) if self.table.item(row, 1) else ""
+        self.ef_sizes.setText(stored_desc or "")
 
-        self.ef_category.setText(self.table.item(row, 5).text() if self.table.item(row, 5) else "")
-        img_item = self.table.item(row, 6)
+        self.ef_category.setText(self.table.item(row, 4).text() if self.table.item(row, 4) else "")
+        img_item = self.table.item(row, 5)
         self.ef_image.setText(img_item.text() if img_item else "")
 
     # ── toggle edit form ──────────────────────────────────────────────────────
@@ -1123,7 +1116,7 @@ class InventoryPage(QWidget):
             cur = db.cursor(dictionary=True)
             cur.execute("""
                 SELECT p.id, p.product_name, p.base_price, p.stock, p.image_path,
-                       c.category_name
+                       p.description, c.category_name
                 FROM products p
                 LEFT JOIN categories c ON p.category_id = c.id
                 ORDER BY c.category_name, p.product_name
@@ -1166,13 +1159,14 @@ class InventoryPage(QWidget):
                     product["product_name"],
                     f"{product['base_price']:.2f}" if product["base_price"] is not None else "0.00",
                     str(display_stock),
-                    ", ".join(self._sizes),
                     product["category_name"] or "",
                     product["image_path"] or "",
                 ]):
                     self.table.setItem(row, col, self._make_cell(val))
                 self.table.setItem(row, 0, self._make_cell(str(row + 1)))
                 self.table.item(row, 0).setData(Qt.UserRole, pid)
+                # Store description as hidden data on product name cell for edit form
+                self.table.item(row, 1).setData(Qt.UserRole, product["description"] or "")
         except Exception as err:
             QMessageBox.critical(self, "DB Error", f"Could not load products:\n{err}")
 
@@ -1187,7 +1181,7 @@ class InventoryPage(QWidget):
         if not self.name.text() or not self.quantity.text():
             QMessageBox.warning(self, "Missing Fields", "Please fill in Product Name and Quantity.")
             return
-        selected_size = self.expiry.currentText()
+        description_text = self.expiry.text().strip()
         try:
             db = get_db_connection()
             cur = db.cursor()
@@ -1201,10 +1195,11 @@ class InventoryPage(QWidget):
             price = float(self.price.text() or 0)
 
             cur.execute(
-                "INSERT INTO products (category_id, product_name, base_price, stock, image_path)"
-                " VALUES (%s,%s,%s,%s,%s)",
+                "INSERT INTO products (category_id, product_name, description, base_price, stock, image_path)"
+                " VALUES (%s,%s,%s,%s,%s,%s)",
                 (cat_id,
                  self.name.text(),
+                 description_text or None,
                  price,
                  int(self.quantity.text()),
                  self.image_path.text().strip() or None)
@@ -1222,15 +1217,15 @@ class InventoryPage(QWidget):
         for col, val in enumerate([
             "",  # #
             self.name.text(),
-            f"{price:.2f}",  # Price ✅
-            self.quantity.text(),  # Qty Left ✅
-            selected_size,  # Available Sizes ✅
-            cat_name,  # Category ✅
+            f"{price:.2f}",
+            self.quantity.text(),
+            cat_name,
             self.image_path.text().strip()
         ]):
             self.table.setItem(row, col, self._make_cell(val))
         self.table.setItem(row, 0, self._make_cell(str(row + 1)))
         self.table.item(row, 0).setData(Qt.UserRole, new_id)
+        self.table.item(row, 1).setData(Qt.UserRole, description_text)
         self.clear_inputs()
         # Reload table from DB so all windows stay in sync, then notify siblings.
         self.load_from_db()
@@ -1246,7 +1241,7 @@ class InventoryPage(QWidget):
             return
         name          = self.ef_name.text().strip()
         qty           = self.ef_qty.text().strip()
-        selected_size = self.ef_sizes.currentText()
+        description_text = self.ef_sizes.text().strip()
         if not name or not qty:
             QMessageBox.warning(self, "Missing Fields", "Please fill in Product Name and Quantity.")
             return
@@ -1264,9 +1259,10 @@ class InventoryPage(QWidget):
                     cur.execute("INSERT INTO categories (category_name) VALUES (%s)", (cat_name,))
                     cat_id = cur.lastrowid
                 cur.execute(
-                    "UPDATE products SET product_name=%s, base_price=%s, stock=%s, category_id=%s, image_path=%s"
+                    "UPDATE products SET product_name=%s, description=%s, base_price=%s, stock=%s, category_id=%s, image_path=%s"
                     " WHERE id=%s",
                     (name,
+                     description_text or None,
                      float(self.ef_price.text() or 0),
                      int(qty),
                      cat_id,
@@ -1282,11 +1278,12 @@ class InventoryPage(QWidget):
             "", name,
             self.ef_price.text(),
             qty,
-            selected_size,
             self.ef_category.text(),
             self.ef_image.text().strip()
         ]):
             self.table.setItem(self.selected_row, col, self._make_cell(val))
+        # Update hidden description data on name cell
+        self.table.item(self.selected_row, 1).setData(Qt.UserRole, description_text)
         self.action_info.setText(f"Selected:  {name}   |   Qty: {qty}")
         self.edit_form.hide()
         # Reload table from DB so all windows stay in sync, then notify siblings.
@@ -1337,7 +1334,7 @@ class InventoryPage(QWidget):
         self.name.clear()
         self.price.clear()
         self.quantity.clear()
-        self.expiry.setCurrentIndex(0)
+        self.expiry.clear()
         self.type.clear()
         self.image_path.clear()
 

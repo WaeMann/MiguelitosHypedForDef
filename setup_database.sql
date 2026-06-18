@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS products (
     id           INT AUTO_INCREMENT PRIMARY KEY,
     category_id  INT,
     product_name VARCHAR(150) NOT NULL,
+    description  VARCHAR(255) DEFAULT NULL,
     base_price   DECIMAL(10,2) NOT NULL,
     image_path   VARCHAR(255),
     stock        INT DEFAULT 100,
@@ -123,4 +124,4 @@ CREATE TABLE IF NOT EXISTS audit_log (
 INSERT IGNORE INTO users (username, password_hash, role)
 VALUES ('admin', SHA2('admin123', 256), 'admin'),
        ('Yngel', SHA2('Cutie@123', 256), 'admin'),
-       ('cashier', SHA2('cashier123'), 'cashier');
+       ('cashier', SHA2('cashier123', 256), 'cashier');
