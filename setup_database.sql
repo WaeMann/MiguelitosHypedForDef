@@ -122,4 +122,5 @@ CREATE TABLE IF NOT EXISTS audit_log (
 -- ── DEFAULT ADMIN (SHA-256; auto-upgraded to PBKDF2 on first login) ───────
 INSERT IGNORE INTO users (username, password_hash, role)
 VALUES ('admin', SHA2('admin123', 256), 'admin'),
-       ('Yngel', SHA2('Cutie@123', 256), 'admin');
+       ('Yngel', SHA2('Cutie@123', 256), 'admin'),
+       ('cashier', SHA2('cashier123'), 'cashier');
