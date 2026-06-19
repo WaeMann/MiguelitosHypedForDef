@@ -672,7 +672,7 @@ def load_products_from_db():
 
         cur.execute("""
             SELECT p.id, p.product_name, p.base_price, p.image_path, p.stock,
-                   p.description, c.category_name
+                   c.category_name
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             ORDER BY c.category_name, p.product_name
@@ -1201,7 +1201,7 @@ class IMS(QWidget):
         self.section_grids = []
         self.menu_cards = []
 
-        # Update hidden change order bar size combo with latest sizes
+        # Update size combo box with latest sizes
         self.bottom_combo2.clear()
         self.bottom_combo2.addItems(self.sizes)
 
@@ -1258,8 +1258,7 @@ class IMS(QWidget):
             return
         product = self.product_map.get(self.selected_item, {})
         base = float(product.get("base_price", 0))
-        final = int(base)
-        self.price_text.setText(f"₱{final}")
+        self.price_text.setText(f"₱{int(base)}")
 
     def button_clicked(self):
         if not self.selected_item:
@@ -1267,8 +1266,7 @@ class IMS(QWidget):
 
         product = self.product_map.get(self.selected_item, {})
         qty = int(self.combo1.currentText())
-        # Use the product's description as the size label (e.g. "12oz" or "16oz")
-        size = product.get("description") or ""
+        size = product.get("category_name", "")
 
         base = float(product.get("base_price", 0))
         unit_price = int(base)
