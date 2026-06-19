@@ -800,6 +800,7 @@ class IMS(QWidget):
         self.current_columns = 3
 
         self.selected_item = None
+        self.selected_product = None
         self.order_total = 0
         self.selected_order_row = None
 
@@ -1118,10 +1119,10 @@ class IMS(QWidget):
 
             # Only make clickable if ingredients are linked AND stock > 0
             if has_ingredients and stock > 0:
-                card.mousePressEvent = lambda e, n=name: self.item_clicked(n)
+                card.mousePressEvent = lambda e, p=product: self.item_clicked(p)
             elif not has_ingredients:
                 # Still make it clickable so the warning message fires
-                card.mousePressEvent = lambda e, n=name: self.item_clicked(n)
+                card.mousePressEvent = lambda e, p=product: self.item_clicked(p)
 
             vbox = QVBoxLayout(card)
             vbox.setAlignment(Qt.AlignCenter)
@@ -1232,10 +1233,12 @@ class IMS(QWidget):
     # -------------------------------------------------------------------------
     # Slots
     # -------------------------------------------------------------------------
-    def item_clicked(self, name):
-        product = self.product_map.get(name, {})
+    def item_clicked(self, product):
+        name = product.get("product_name", "")
 
-        # Block ordering if no ingredients are linked
+        # Block ordering if no ingredients are linked.
+        # `product` is the exact row for the card that was clicked, so this
+        # only fires for that specific size/variant — not a same-named sibling.
         if not product.get("has_ingredients", False):
             QMessageBox.warning(
                 self,
@@ -1248,6 +1251,7 @@ class IMS(QWidget):
 
         self.bottom_box.hide()
         self.selected_item = name
+        self.selected_product = product
         self.yellow_text.setText(name)
         self.update_price_display()
         image_path = product.get("image_path") or "images/default.png"
@@ -1256,7 +1260,7 @@ class IMS(QWidget):
     def update_price_display(self):
         if not self.selected_item:
             return
-        product = self.product_map.get(self.selected_item, {})
+        product = getattr(self, "selected_product", None) or self.product_map.get(self.selected_item, {})
         base = float(product.get("base_price", 0))
         self.price_text.setText(f"₱{int(base)}")
 
@@ -1264,7 +1268,7 @@ class IMS(QWidget):
         if not self.selected_item:
             return
 
-        product = self.product_map.get(self.selected_item, {})
+        product = getattr(self, "selected_product", None) or self.product_map.get(self.selected_item, {})
         qty = int(self.combo1.currentText())
         size = product.get("category_name", "")
 
@@ -1448,6 +1452,7 @@ class IMS(QWidget):
         self.order_total = 0
         self.total_label.setText("Total: ₱0")
         self.selected_item = None
+        self.selected_product = None
         self.selected_order_row = None
         self.yellow_text.setText("Item Name")
         self.price_text.setText("₱0")

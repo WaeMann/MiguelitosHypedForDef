@@ -1030,7 +1030,6 @@ class InventoryPage(QWidget):
         # Pre-fill edit form
         self.ef_name.setText(name)
         self.ef_qty.setText(qty)
-
         self.ef_category.setText(self.table.item(row, 4).text() if self.table.item(row, 4) else "")
         img_item = self.table.item(row, 5)
         self.ef_image.setText(img_item.text() if img_item else "")
@@ -1055,6 +1054,10 @@ class InventoryPage(QWidget):
         name = self.table.item(self.selected_row, 1).text()
         dlg = ManageIngredientsDialog(product_id, name, parent=self)
         dlg.exec_()
+        # Refresh the inventory table so stock counts reflect any ingredient-link changes
+        self.load_from_db()
+        if self.on_change:
+            self.on_change()
 
     # ── image helpers (Add panel) ─────────────────────────────────────────────
 
@@ -1313,6 +1316,7 @@ class InventoryPage(QWidget):
         self.name.clear()
         self.price.clear()
         self.quantity.clear()
+        self.expiry.setCurrentIndex(0)
         self.type.clear()
         self.image_path.clear()
 
