@@ -70,12 +70,10 @@ DevNuts
 *   -Add Login Tracker (Copy from FasterFood)
 **  -Add Receipts (Copy from FasterFood)
 *   -Make Login Fullscreen with no border
-** -Add income trend analysis (from Birds repo)
+**  -Add income trend analysis (from Birds repo)
 *** -Make every scrollable area draggable
-** -Add 3 sizes. Sizes editor should show  "12oz, 16oz, 12oz and 16oz". Inventory should show that but main should
+**  -Add 3 sizes. Sizes editor should show  "12oz, 16oz, 12oz and 16oz". Inventory should show that but main should
 only show the 2 sizes.
-*** -Add more security features - Unique session IDs, Logout type tracking, Audit on order placement or user unlock
-(Copy from FasterFood)
-***!-Ignore 3 sizes.In inventory.py, remove "available sizes" from scroll table, add item, and edit. Change the "description"
-to available sizes(12oz, 16oz)
-***-Fix PDF. WTF is that?!
+**  -Add more security features - Unique session IDs, Logout type tracking, Audit on order placement or user unlock (Copy from FasterFood)
+**  -Ignore 3 sizes.In inventory.py, remove "available sizes" from scroll table, add item, and edit. Change the "description" to available sizes(12oz, 16oz)
+*** -Fix PDF. WTF is that?!
