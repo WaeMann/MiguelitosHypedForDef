@@ -1615,6 +1615,525 @@ class UsersDialog(QDialog):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# SECURITY DIALOG  (Login Log · Sessions · Audit Log)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SecurityDialog(QDialog):
+    """Three-tab security panel: Login Log, Session History, and Audit Trail."""
+
+    # Colour map used by the Audit Log tab
+    _AUDIT_BG = {
+        "LOGIN":         QColor("#D1FAE5"),
+        "LOGOUT":        QColor("#EDE9FE"),
+        "ORDER_PLACED":  QColor("#DBEAFE"),
+        "USER_CREATED":  QColor("#CFFAFE"),
+        "USER_EDITED":   QColor("#FEF9C3"),
+        "USER_DELETED":  QColor("#FEE2E2"),
+        "USER_UNLOCKED": QColor("#FEF3C7"),
+    }
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Security Logs")
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.resize(1060, 640)
+        self.setMinimumSize(860, 520)
+        self.setStyleSheet(
+            "QDialog { background-color: #EFE9D1; font-family: 'Segoe UI'; }"
+        )
+        self._build()
+        _center_dialog(self)
+        self._reload_login_log()
+        self._reload_sessions()
+        self._reload_audit()
+
+    # ── LAYOUT ────────────────────────────────────────────────────────────────
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        _dialog_header(
+            root,
+            "🔒  Security Logs",
+            subtitle="Login activity · Session history · Audit trail",
+            close_cb=self.reject,
+        )
+
+        tabs = QTabWidget()
+        tabs.setStyleSheet("""
+            QTabWidget::pane  { border: none; background: #EFE9D1; }
+            QTabBar::tab {
+                background: #2b2b2b;
+                color: #E8D28C;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 9px 22px;
+                border: none;
+                min-width: 160px;
+            }
+            QTabBar::tab:selected          { background: #E8D28C; color: #2b2b2b; }
+            QTabBar::tab:hover:!selected   { background: #3d3d3d; }
+        """)
+
+        # ── Tab 1: Login Log ─────────────────────────────────────────────────
+        login_w = QWidget()
+        login_w.setStyleSheet("background: #EFE9D1;")
+        self._build_login_tab(login_w)
+        tabs.addTab(login_w, "🔐  Login Log")
+
+        # ── Tab 2: Sessions ──────────────────────────────────────────────────
+        ses_w = QWidget()
+        ses_w.setStyleSheet("background: #EFE9D1;")
+        self._build_session_tab(ses_w)
+        tabs.addTab(ses_w, "⏱  Sessions")
+
+        # ── Tab 3: Audit Log ─────────────────────────────────────────────────
+        aud_w = QWidget()
+        aud_w.setStyleSheet("background: #EFE9D1;")
+        self._build_audit_tab(aud_w)
+        tabs.addTab(aud_w, "📜  Audit Log")
+
+        root.addWidget(tabs, stretch=1)
+
+    # ── SHARED HELPERS ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _filter_style(active: bool) -> str:
+        if active:
+            return (
+                "QPushButton { background-color:#2b2b2b; color:#E8D28C; "
+                "font-size:12px; border-radius:6px; font-weight:bold; "
+                "border:none; padding:4px 14px; }"
+            )
+        return (
+            "QPushButton { background-color:white; color:#555; "
+            "font-size:12px; border-radius:6px; font-weight:bold; "
+            "border:1px solid #c8b87a; padding:4px 14px; } "
+            "QPushButton:hover { background-color:#E8D28C; color:#222; }"
+        )
+
+    @staticmethod
+    def _std_table(parent_layout: QVBoxLayout, headers: list,
+                   stretch_col: int, col_widths: dict) -> "QTableWidget":
+        """Create a standardised read-only table and add it to parent_layout."""
+        tbl = QTableWidget()
+        tbl.setStyleSheet(TABLE_STYLE)
+        tbl.setColumnCount(len(headers))
+        tbl.setHorizontalHeaderLabels(headers)
+        tbl.horizontalHeader().setSectionResizeMode(stretch_col, QHeaderView.Stretch)
+        for col, w in col_widths.items():
+            tbl.setColumnWidth(col, w)
+        tbl.verticalHeader().setVisible(False)
+        tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
+        tbl.setSelectionMode(QAbstractItemView.SingleSelection)
+        tbl.setAlternatingRowColors(True)
+        tbl.setShowGrid(False)
+        parent_layout.addWidget(tbl)
+        return tbl
+
+    @staticmethod
+    def _toolbar(count_attr_holder, refresh_cb,
+                 extra_left=None) -> tuple:
+        """Build the standard refresh toolbar; return (layout, count_label)."""
+        tb = QHBoxLayout()
+        tb.setSpacing(8)
+        if extra_left:
+            for w in extra_left:
+                tb.addWidget(w)
+        count_lbl = QLabel("")
+        count_lbl.setStyleSheet(
+            "color:#888; font-size:12px; background:transparent;"
+        )
+        tb.addStretch()
+        tb.addWidget(count_lbl)
+        ref = QPushButton("🔄  Refresh")
+        ref.setStyleSheet(ADMIN_BTN_STYLE)
+        ref.setFixedHeight(34)
+        ref.clicked.connect(refresh_cb)
+        tb.addWidget(ref)
+        return tb, count_lbl
+
+    # ── LOGIN LOG TAB ─────────────────────────────────────────────────────────
+
+    def _build_login_tab(self, parent: QWidget):
+        lay = QVBoxLayout(parent)
+        lay.setContentsMargins(16, 12, 16, 12)
+        lay.setSpacing(10)
+
+        # ── Stats pills ──────────────────────────────────────────────────────
+        stats_frame = QFrame()
+        stats_frame.setStyleSheet("QFrame { background: transparent; }")
+        sf_lay = QHBoxLayout(stats_frame)
+        sf_lay.setContentsMargins(0, 0, 0, 0)
+        sf_lay.setSpacing(12)
+
+        stats_title = QLabel("Today's Login Activity")
+        stats_title.setStyleSheet(
+            "font-size:14px; font-weight:bold; color:#2b2b2b; background:transparent;"
+        )
+        sf_lay.addWidget(stats_title)
+
+        self._log_stat_vals = {}
+        for key, label, color in [
+            ("total",   "Total Attempts", "#2b2b2b"),
+            ("success", "✅ Successful",   "#1e7f3f"),
+            ("failed",  "✖ Failed",        "#c0392b"),
+        ]:
+            pill = QFrame()
+            pill.setStyleSheet(
+                "QFrame { background:white; border-radius:8px; border:1px solid #ede9dc; }"
+            )
+            drop_shadow(pill, blur=10, alpha=40)
+            pl = QVBoxLayout(pill)
+            pl.setContentsMargins(14, 6, 14, 6)
+            pl.setSpacing(0)
+            lbl_w = QLabel(label)
+            lbl_w.setStyleSheet(
+                "font-size:11px; color:#888; background:transparent; border:none;"
+            )
+            val_w = QLabel("—")
+            val_w.setStyleSheet(
+                f"font-size:20px; font-weight:bold; color:{color}; "
+                "background:transparent; border:none;"
+            )
+            pl.addWidget(lbl_w)
+            pl.addWidget(val_w)
+            self._log_stat_vals[key] = val_w
+            sf_lay.addWidget(pill)
+
+        sf_lay.addStretch()
+        lay.addWidget(stats_frame)
+
+        # ── Filter row + toolbar ─────────────────────────────────────────────
+        filter_row = QHBoxLayout()
+        filter_row.setSpacing(6)
+        filter_lbl = QLabel("Filter:")
+        filter_lbl.setStyleSheet(
+            "color:#555; font-size:12px; font-weight:bold; background:transparent;"
+        )
+        filter_row.addWidget(filter_lbl)
+
+        self._log_filter_grp = QButtonGroup(self)
+        self._log_filter_grp.setExclusive(True)
+        for label, val in [("All","all"),("✅ Success","success"),("✖ Failed","failed")]:
+            btn = QPushButton(label)
+            btn.setCheckable(True)
+            btn.setFixedHeight(30)
+            btn.setProperty("fval", val)
+            is_first = val == "all"
+            btn.setChecked(is_first)
+            btn.setStyleSheet(self._filter_style(is_first))
+            btn.clicked.connect(
+                lambda _checked, b=btn: self._apply_log_filter(b)
+            )
+            self._log_filter_grp.addButton(btn)
+            filter_row.addWidget(btn)
+
+        filter_row.addStretch()
+        self._log_count_lbl = QLabel("")
+        self._log_count_lbl.setStyleSheet(
+            "color:#888; font-size:12px; background:transparent;"
+        )
+        filter_row.addWidget(self._log_count_lbl)
+        ref_log = QPushButton("🔄  Refresh")
+        ref_log.setStyleSheet(ADMIN_BTN_STYLE)
+        ref_log.setFixedHeight(34)
+        ref_log.clicked.connect(self._reload_login_log)
+        filter_row.addWidget(ref_log)
+        lay.addLayout(filter_row)
+
+        # ── Table ────────────────────────────────────────────────────────────
+        self._log_table = self._std_table(
+            lay,
+            headers=["#","Username","Result","Reason / Info","Session ID","Timestamp"],
+            stretch_col=3,
+            col_widths={0:50, 1:110, 2:90, 4:190, 5:150},
+        )
+
+    def _apply_log_filter(self, clicked_btn: "QPushButton"):
+        for btn in self._log_filter_grp.buttons():
+            btn.setStyleSheet(self._filter_style(btn is clicked_btn))
+        self._reload_login_log()
+
+    def _active_log_filter(self) -> str:
+        for btn in self._log_filter_grp.buttons():
+            if btn.isChecked():
+                return btn.property("fval")
+        return "all"
+
+    def _reload_login_log(self):
+        # Refresh today's stats
+        today_str = date.today().isoformat()
+        try:
+            db  = get_db_connection()
+            cur = db.cursor(dictionary=True)
+            cur.execute(
+                """SELECT COUNT(*) AS total,
+                          COALESCE(SUM(success), 0)           AS successes,
+                          COUNT(*) - COALESCE(SUM(success),0) AS failures
+                   FROM login_log
+                   WHERE DATE(logged_at) = %s""",
+                (today_str,),
+            )
+            row = cur.fetchone()
+            db.close()
+            if row:
+                self._log_stat_vals["total"].setText(str(int(row["total"]   or 0)))
+                self._log_stat_vals["success"].setText(str(int(row["successes"] or 0)))
+                self._log_stat_vals["failed"].setText(str(int(row["failures"]  or 0)))
+        except Exception as err:
+            print(f"[Security/login-stats] {err}")
+
+        # Reload table rows
+        flt = self._active_log_filter()
+        self._log_table.setRowCount(0)
+        try:
+            db  = get_db_connection()
+            cur = db.cursor(dictionary=True)
+            cur.execute(
+                "SELECT * FROM login_log ORDER BY id DESC LIMIT 500"
+            )
+            rows = cur.fetchall()
+            db.close()
+        except Exception as err:
+            QMessageBox.critical(self, "Database Error", str(err))
+            return
+
+        display = []
+        for row in rows:
+            success = bool(int(row.get("success", 0) or 0))
+            if flt == "success" and not success:
+                continue
+            if flt == "failed" and success:
+                continue
+            display.append((row, success))
+
+        self._log_table.setRowCount(len(display))
+        for r, (row, success) in enumerate(display):
+            result_txt = "✅ Success" if success else "✖ Failed"
+            bg = QColor("#D1FAE5") if success else QColor("#FEE2E2")
+
+            cells = [
+                (str(row.get("id", "")),            Qt.AlignCenter),
+                (str(row.get("username", "—")),     Qt.AlignLeft),
+                (result_txt,                         Qt.AlignCenter),
+                (str(row.get("reason", "") or "—"), Qt.AlignLeft),
+                (str(row.get("session_id","") or "—"), Qt.AlignLeft),
+                (str(row.get("logged_at","") or "—"),  Qt.AlignLeft),
+            ]
+            for c, (text, align) in enumerate(cells):
+                item = QTableWidgetItem(text)
+                item.setTextAlignment(align | Qt.AlignVCenter)
+                item.setBackground(bg)
+                self._log_table.setItem(r, c, item)
+
+        self._log_count_lbl.setText(f"{len(display)} record(s)")
+
+    # ── SESSION LOG TAB ───────────────────────────────────────────────────────
+
+    def _build_session_tab(self, parent: QWidget):
+        lay = QVBoxLayout(parent)
+        lay.setContentsMargins(16, 12, 16, 12)
+        lay.setSpacing(10)
+
+        # Toolbar
+        tb = QHBoxLayout()
+        tb.setSpacing(8)
+        self._ses_count_lbl = QLabel("")
+        self._ses_count_lbl.setStyleSheet(
+            "color:#888; font-size:12px; background:transparent;"
+        )
+        tb.addWidget(self._ses_count_lbl)
+        tb.addStretch()
+        ref_ses = QPushButton("🔄  Refresh")
+        ref_ses.setStyleSheet(ADMIN_BTN_STYLE)
+        ref_ses.setFixedHeight(34)
+        ref_ses.clicked.connect(self._reload_sessions)
+        tb.addWidget(ref_ses)
+        lay.addLayout(tb)
+
+        # Table
+        self._ses_table = self._std_table(
+            lay,
+            headers=["#","Username","Session ID","Login Time","Logout Time","Duration","Logout Type"],
+            stretch_col=2,
+            col_widths={0:50, 1:110, 3:150, 4:150, 5:90, 6:100},
+        )
+
+        hint = QLabel("Blue = active session  |  Amber = ended by timeout")
+        hint.setStyleSheet("color:#bbb; font-size:11px; background:transparent;")
+        hint.setAlignment(Qt.AlignCenter)
+        lay.addWidget(hint)
+
+    def _reload_sessions(self):
+        self._ses_table.setRowCount(0)
+        try:
+            db  = get_db_connection()
+            cur = db.cursor(dictionary=True)
+            cur.execute(
+                "SELECT * FROM session_log ORDER BY id DESC LIMIT 200"
+            )
+            rows = cur.fetchall()
+            db.close()
+        except Exception as err:
+            QMessageBox.critical(self, "Database Error", str(err))
+            return
+
+        self._ses_table.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            dur_s  = row.get("duration_s")
+            dur_t  = (
+                f"{int(dur_s)//60}m {int(dur_s)%60}s"
+                if dur_s is not None else "Active"
+            )
+            ltype = str(row.get("logout_type", "") or "—")
+
+            is_active  = row.get("logout_at") is None
+            is_timeout = (not is_active) and ltype == "timeout"
+
+            if is_active:
+                bg = QColor("#DBEAFE")   # blue — still logged in
+            elif is_timeout:
+                bg = QColor("#FEF3C7")   # amber — timed out
+            else:
+                bg = None
+
+            cells = [
+                (str(row.get("id", "")),                      Qt.AlignCenter),
+                (str(row.get("username", "—")),               Qt.AlignLeft),
+                (str(row.get("session_id", "—")),             Qt.AlignLeft),
+                (str(row.get("login_at",  "—") or "—"),      Qt.AlignLeft),
+                (str(row.get("logout_at", "—") or "—"),      Qt.AlignLeft),
+                (dur_t,                                        Qt.AlignCenter),
+                (ltype,                                        Qt.AlignCenter),
+            ]
+            for c, (text, align) in enumerate(cells):
+                item = QTableWidgetItem(text)
+                item.setTextAlignment(align | Qt.AlignVCenter)
+                if bg:
+                    item.setBackground(bg)
+                self._ses_table.setItem(r, c, item)
+
+        self._ses_count_lbl.setText(f"{len(rows)} record(s)")
+
+    # ── AUDIT LOG TAB ─────────────────────────────────────────────────────────
+
+    def _build_audit_tab(self, parent: QWidget):
+        lay = QVBoxLayout(parent)
+        lay.setContentsMargins(16, 12, 16, 12)
+        lay.setSpacing(10)
+
+        # Filter bar
+        fb = QHBoxLayout()
+        fb.setSpacing(5)
+        flbl = QLabel("Filter:")
+        flbl.setStyleSheet(
+            "color:#555; font-size:12px; font-weight:bold; background:transparent;"
+        )
+        fb.addWidget(flbl)
+
+        self._aud_filter_grp = QButtonGroup(self)
+        self._aud_filter_grp.setExclusive(True)
+        for action in [
+            "All","LOGIN","LOGOUT","ORDER_PLACED",
+            "USER_CREATED","USER_EDITED","USER_DELETED","USER_UNLOCKED",
+        ]:
+            btn = QPushButton(action)
+            btn.setCheckable(True)
+            btn.setFixedHeight(28)
+            btn.setProperty("fval", action)
+            is_first = action == "All"
+            btn.setChecked(is_first)
+            btn.setStyleSheet(self._filter_style(is_first))
+            btn.clicked.connect(
+                lambda _checked, b=btn: self._apply_aud_filter(b)
+            )
+            self._aud_filter_grp.addButton(btn)
+            fb.addWidget(btn)
+
+        fb.addStretch()
+        self._aud_count_lbl = QLabel("")
+        self._aud_count_lbl.setStyleSheet(
+            "color:#888; font-size:12px; background:transparent;"
+        )
+        fb.addWidget(self._aud_count_lbl)
+        ref_aud = QPushButton("🔄  Refresh")
+        ref_aud.setStyleSheet(ADMIN_BTN_STYLE)
+        ref_aud.setFixedHeight(34)
+        ref_aud.clicked.connect(self._reload_audit)
+        fb.addWidget(ref_aud)
+        lay.addLayout(fb)
+
+        # Table
+        self._aud_table = self._std_table(
+            lay,
+            headers=["#","User","Action","Details","Timestamp"],
+            stretch_col=3,
+            col_widths={0:50, 1:110, 2:150, 4:150},
+        )
+
+        hint = QLabel("Full immutable record of all significant system actions.")
+        hint.setStyleSheet("color:#bbb; font-size:11px; background:transparent;")
+        hint.setAlignment(Qt.AlignCenter)
+        lay.addWidget(hint)
+
+    def _apply_aud_filter(self, clicked_btn: "QPushButton"):
+        for btn in self._aud_filter_grp.buttons():
+            btn.setStyleSheet(self._filter_style(btn is clicked_btn))
+        self._reload_audit()
+
+    def _active_aud_filter(self) -> str:
+        for btn in self._aud_filter_grp.buttons():
+            if btn.isChecked():
+                return btn.property("fval")
+        return "All"
+
+    def _reload_audit(self):
+        flt = self._active_aud_filter()
+        self._aud_table.setRowCount(0)
+        try:
+            db  = get_db_connection()
+            cur = db.cursor(dictionary=True)
+            cur.execute(
+                "SELECT * FROM audit_log ORDER BY id DESC LIMIT 500"
+            )
+            rows = cur.fetchall()
+            db.close()
+        except Exception as err:
+            QMessageBox.critical(self, "Database Error", str(err))
+            return
+
+        display = [
+            row for row in rows
+            if flt == "All" or str(row.get("action","")) == flt
+        ]
+
+        self._aud_table.setRowCount(len(display))
+        for r, row in enumerate(display):
+            action = str(row.get("action","") or "")
+            bg = self._AUDIT_BG.get(action)
+
+            cells = [
+                (str(row.get("id", "")),                       Qt.AlignCenter),
+                (str(row.get("username", "—")),                Qt.AlignLeft),
+                (action,                                        Qt.AlignCenter),
+                (str(row.get("detail",   "") or "—"),          Qt.AlignLeft),
+                (str(row.get("logged_at","") or "—"),          Qt.AlignLeft),
+            ]
+            for c, (text, align) in enumerate(cells):
+                item = QTableWidgetItem(text)
+                item.setTextAlignment(align | Qt.AlignVCenter)
+                if bg:
+                    item.setBackground(bg)
+                self._aud_table.setItem(r, c, item)
+
+        self._aud_count_lbl.setText(f"{len(display)} record(s)")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # REPORT PAGE
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -2016,7 +2535,7 @@ class ReportPage(QWidget):
             btn.clicked.connect(slot)
             bl.addWidget(btn)
 
-        # Admin-only: Manage Users
+        # Admin-only: Manage Users + Security
         if self.role == "admin":
             usr_btn = QPushButton("👤  Manage Users")
             usr_btn.setFixedHeight(36)
@@ -2025,6 +2544,14 @@ class ReportPage(QWidget):
             drop_shadow(usr_btn, blur=10, alpha=55)
             usr_btn.clicked.connect(self._open_users)
             bl.addWidget(usr_btn)
+
+            sec_btn = QPushButton("🔒  Security")
+            sec_btn.setFixedHeight(36)
+            sec_btn.setStyleSheet(ADMIN_BTN_STYLE)
+            sec_btn.setCursor(Qt.PointingHandCursor)
+            drop_shadow(sec_btn, blur=10, alpha=55)
+            sec_btn.clicked.connect(self._open_security)
+            bl.addWidget(sec_btn)
 
         bl.addStretch()
 
@@ -2057,6 +2584,10 @@ class ReportPage(QWidget):
 
     def _open_users(self):
         dlg = UsersDialog(parent=self)
+        dlg.exec_()
+
+    def _open_security(self):
+        dlg = SecurityDialog(parent=self)
         dlg.exec_()
 
     # ── PANEL FACTORY ────────────────────────────────────────────────────────
