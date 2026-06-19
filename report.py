@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QCheckBox, QAbstractItemView, QTextEdit, QDateEdit, QFileDialog,
     QButtonGroup, QTabWidget
 )
-from PyQt5.QtCore import Qt, QSize, QDate, QDateTime
+from PyQt5.QtCore import Qt, QSize, QDate, QDateTime, QTimer
 from PyQt5.QtGui import QPixmap, QIcon, QColor
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
 from datetime import date, timedelta, datetime

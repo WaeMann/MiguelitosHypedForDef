@@ -6,7 +6,8 @@ from PyQt5.QtWidgets import (
     QPushButton, QScrollArea, QGridLayout, QVBoxLayout, QHBoxLayout,
     QComboBox, QSizePolicy, QMessageBox, QDialog, QLineEdit,
 )
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QTimer
+import datetime as _dt
 from PyQt5.QtGui import QColor, QPixmap, QIntValidator, QFont
 
 from db import get_db_connection
@@ -84,6 +85,38 @@ class ClickableRow(QFrame):
     def mousePressEvent(self, event):
         self.clicked.emit(self)
         super().mousePressEvent(event)
+
+
+class ClockWidget(QWidget):
+    """Live time + date label for the top bar (upper-right)."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(1)
+
+        self.time_lbl = QLabel()
+        self.time_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.time_lbl.setFont(QFont("Segoe UI", 15, QFont.Bold))
+        self.time_lbl.setStyleSheet("color: #2b2b2b; background: transparent;")
+
+        self.date_lbl = QLabel()
+        self.date_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.date_lbl.setFont(QFont("Segoe UI", 9))
+        self.date_lbl.setStyleSheet("color: #555555; background: transparent;")
+
+        layout.addWidget(self.time_lbl)
+        layout.addWidget(self.date_lbl)
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start(1000)
+        self._tick()
+
+    def _tick(self):
+        now = _dt.datetime.now()
+        self.time_lbl.setText(now.strftime("%I:%M:%S %p"))
+        self.date_lbl.setText(now.strftime("%A, %b %d, %Y"))
 
 
 class DragScrollArea(QScrollArea):
@@ -936,7 +969,7 @@ class IMS(QWidget):
         top_bar.setFixedHeight(80)
         top_bar.setStyleSheet("background-color: #DED6B2;")
         top_bar_layout = QHBoxLayout(top_bar)
-        top_bar_layout.setContentsMargins(24, 0, 125, 0)
+        top_bar_layout.setContentsMargins(24, 0, 16, 0)
         top_bar_layout.setSpacing(10)
 
         nav_layout = QHBoxLayout()
@@ -956,13 +989,16 @@ class IMS(QWidget):
         nav_layout.addWidget(self.report_top_btn)
 
         self.admin_btn = QPushButton("🚪 LOG OUT")
-        self.admin_btn.setFixedSize(170, 36)
+        self.admin_btn.setFixedSize(130, 36)
         self.admin_btn.setStyleSheet(NAV_BTN_STYLE)
         drop_shadow(self.admin_btn, blur=18, alpha=100)
 
         top_bar_layout.addStretch()
         top_bar_layout.addLayout(nav_layout)
         top_bar_layout.addStretch()
+        clock_widget = ClockWidget()
+        top_bar_layout.addWidget(clock_widget)
+        top_bar_layout.addSpacing(12)
         top_bar_layout.addWidget(self.admin_btn)
 
         main_area_layout.addWidget(top_bar)
