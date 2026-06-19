@@ -218,10 +218,14 @@ QComboBox QAbstractItemView {
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ManageIngredientsDialog(QDialog):
-    def __init__(self, product_id: int, product_name: str, parent=None):
+    def __init__(self, product_id: int, product_name: str, parent=None, on_change=None):
         super().__init__(parent)
         self.product_id   = product_id
         self.product_name = product_name
+        # Callback fired immediately after any successful add/save/remove,
+        # so the inventory table + POS stay in sync live instead of only
+        # refreshing once this dialog is closed.
+        self._on_change = on_change
 
         self.setWindowTitle(f"Manage Ingredients — {product_name}")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -533,6 +537,8 @@ class ManageIngredientsDialog(QDialog):
             QMessageBox.critical(self, "DB Error", f"Could not link ingredient:\n{err}")
             return
         self._load_linked()
+        if self._on_change:
+            self._on_change()
 
     def _save_amount(self, link_id: int, value: float):
         try:
@@ -544,6 +550,8 @@ class ManageIngredientsDialog(QDialog):
             )
             db.commit()
             db.close()
+            if self._on_change:
+                self._on_change()
             QMessageBox.information(self, "Saved", "Amount updated.")
         except Exception as err:
             QMessageBox.critical(self, "DB Error", f"Could not update amount:\n{err}")
@@ -564,6 +572,9 @@ class ManageIngredientsDialog(QDialog):
             db.close()
             # Reload the list so spin boxes reflect the freshly-saved DB values
             self._load_linked()
+            # Notify the parent immediately — don't wait for this dialog to close.
+            if self._on_change:
+                self._on_change()
             QMessageBox.information(self, "Saved", "All linked ingredient amounts saved.")
         except Exception as err:
             QMessageBox.critical(self, "DB Error", f"Could not save amounts:\n{err}")
@@ -584,6 +595,8 @@ class ManageIngredientsDialog(QDialog):
             QMessageBox.critical(self, "DB Error", f"Could not remove link:\n{err}")
             return
         self._load_linked()
+        if self._on_change:
+            self._on_change()
 
     def _center(self):
         if self.parent():
@@ -827,7 +840,7 @@ class InventoryPage(QWidget):
 
         self.ef_price = QLineEdit()
         self.ef_price.setPlaceholderText("Price")
-        self.ef_price.setValidator(QIntValidator(0, 999999))
+        self.ef_price.setValidator(QDoubleValidator(0.0, 999999.0, 2))
         self.ef_price.setStyleSheet(INPUT_STYLE)
         self.ef_price.setFixedWidth(90)
         self.ef_price.setFixedHeight(36)
@@ -1052,12 +1065,37 @@ class InventoryPage(QWidget):
         if not product_id:
             return
         name = self.table.item(self.selected_row, 1).text()
-        dlg = ManageIngredientsDialog(product_id, name, parent=self)
+        dlg = ManageIngredientsDialog(
+            product_id, name, parent=self,
+            on_change=lambda: self._on_manage_change(product_id),
+        )
         dlg.exec_()
-        # Refresh the inventory table so stock counts reflect any ingredient-link changes
+        # Refresh again on close, just in case (idempotent / safety net).
+        self._on_manage_change(product_id)
+
+    def _on_manage_change(self, product_id):
+        """Called live by ManageIngredientsDialog whenever a link is added,
+        saved, or removed — keeps the inventory table and POS in sync
+        immediately instead of waiting for the dialog to be closed.
+        Also re-selects the same product afterward so the action bar
+        doesn't go stale if reloading shifted row order."""
         self.load_from_db()
+        row = self._find_row_by_product_id(product_id)
+        if row is not None:
+            self._select_row(row)
         if self.on_change:
             self.on_change()
+
+    def _find_row_by_product_id(self, product_id):
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            if item and item.data(Qt.UserRole) == product_id:
+                return row
+        return None
+
+    def _select_row(self, row):
+        self.table.selectRow(row)
+        self._on_row_clicked(row, 0)
 
     # ── image helpers (Add panel) ─────────────────────────────────────────────
 
@@ -1198,20 +1236,6 @@ class InventoryPage(QWidget):
             QMessageBox.critical(self, "DB Error", f"Could not add product:\n{err}")
             return
 
-        row = self.table.rowCount()
-        self.table.insertRow(row)
-        self.table.setRowHeight(row, 40)
-        for col, val in enumerate([
-            "",  # #
-            self.name.text(),
-            f"{price:.2f}",  # Price ✅
-            self.quantity.text(),  # Qty Left ✅
-            cat_name,  # Category ✅
-            self.image_path.text().strip()
-        ]):
-            self.table.setItem(row, col, self._make_cell(val))
-        self.table.setItem(row, 0, self._make_cell(str(row + 1)))
-        self.table.item(row, 0).setData(Qt.UserRole, new_id)
         self.clear_inputs()
         # Reload table from DB so all windows stay in sync, then notify siblings.
         self.load_from_db()
@@ -1258,18 +1282,12 @@ class InventoryPage(QWidget):
             except Exception as err:
                 QMessageBox.critical(self, "DB Error", f"Could not update product:\n{err}")
                 return
-        for col, val in enumerate([
-            "", name,
-            self.ef_price.text(),
-            qty,
-            self.ef_category.text(),
-            self.ef_image.text().strip()
-        ]):
-            self.table.setItem(self.selected_row, col, self._make_cell(val))
-        self.action_info.setText(f"Selected:  {name}   |   Qty: {qty}")
         self.edit_form.hide()
         # Reload table from DB so all windows stay in sync, then notify siblings.
         self.load_from_db()
+        row = self._find_row_by_product_id(product_id)
+        if row is not None:
+            self._select_row(row)
         if self.on_change:
             self.on_change()
 
@@ -1301,24 +1319,26 @@ class InventoryPage(QWidget):
             except Exception as err:
                 QMessageBox.critical(self, "DB Error", f"Could not delete product:\n{err}")
                 return
-        self.table.removeRow(self.selected_row)
         self.selected_row = None
         self.action_bar.hide()
         self.edit_form.hide()
 
-        for row in range(self.table.rowCount()):
-            item = self.table.item(row, 0)
-            if item:
-                item.setText(str(row + 1))
-
+        # Reload table from DB so all windows stay in sync, then notify siblings.
+        # (Previously this just removed the row locally and stopped here, which
+        # is why deletions never showed up in script.py / POS until some other
+        # action — like an unrelated Edit+Save — happened to trigger a refresh.)
+        self.load_from_db()
+        if self.on_change:
+            self.on_change()
 
     def clear_inputs(self):
         self.name.clear()
         self.price.clear()
         self.quantity.clear()
-        self.expiry.setCurrentIndex(0)
         self.type.clear()
         self.image_path.clear()
+        self.img_preview.setPixmap(QPixmap())
+        self.img_preview.setText("No Image")
 
     # ── called by IMS on complete_order ──────────────────────────────────────
 

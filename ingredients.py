@@ -169,8 +169,6 @@ class IngredientsPage(QWidget):
         self.switch_callback = switch_callback
         self.setWindowTitle("Hyped Mangoes — Ingredients")
         self.selected_row = None
-        self._row_ids = {}
-
 
         self.on_change = None
 
@@ -531,7 +529,6 @@ class IngredientsPage(QWidget):
     def load_from_db(self):
         """Load all ingredients from DB into the table."""
         self.table.setRowCount(0)
-        self._row_ids = {}
         try:
             db = get_db_connection()
             cur = db.cursor(dictionary=True)
@@ -553,7 +550,12 @@ class IngredientsPage(QWidget):
                     ingredient["category"] or "",
                 ]):
                     self.table.setItem(row, col, self._make_cell(val))
-                self._row_ids[row] = ingredient["id"]
+                # Store the DB id on the row itself rather than in a
+                # separate row-index → id dict. A dict keyed by row index
+                # silently goes stale the moment rows shift (e.g. after a
+                # delete), which was causing edits/deletes to target the
+                # wrong ingredient.
+                self.table.item(row, 0).setData(Qt.UserRole, ingredient["id"])
         except Exception as err:
             QMessageBox.critical(self, "DB Error", f"Could not load ingredients:\n{err}")
 
@@ -565,12 +567,29 @@ class IngredientsPage(QWidget):
         return item
 
     def update_numbers(self):
-        new_ids = {}
         for row in range(self.table.rowCount()):
-            self.table.setItem(row, 0, self._make_cell(str(row + 1)))
-            if row in self._row_ids:
-                new_ids[row] = self._row_ids[row]
-        self._row_ids = new_ids
+            ingredient_id = self._row_ingredient_id(row)
+            cell = self._make_cell(str(row + 1))
+            cell.setData(Qt.UserRole, ingredient_id)
+            self.table.setItem(row, 0, cell)
+
+    def _row_ingredient_id(self, row):
+        """Read the DB id stored on a row, instead of trusting a row-index dict."""
+        if row is None:
+            return None
+        item = self.table.item(row, 0)
+        return item.data(Qt.UserRole) if item else None
+
+    def _find_row_by_id(self, ingredient_id):
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            if item and item.data(Qt.UserRole) == ingredient_id:
+                return row
+        return None
+
+    def _select_row(self, row):
+        self.table.selectRow(row)
+        self._on_row_clicked(row, 0)
 
     def add_item(self):
         if not self.name.text() or not self.stock.text():
@@ -591,15 +610,13 @@ class IngredientsPage(QWidget):
             QMessageBox.critical(self, "DB Error", f"Could not add ingredient:\n{err}")
             return
 
-        row = self.table.rowCount()
-        self.table.insertRow(row)
-        self.table.setRowHeight(row, 40)
-        for col, val in enumerate(["", self.name.text(), self.stock.text(),
-                                   self.unit.text(), self.category.text()]):
-            self.table.setItem(row, col, self._make_cell(val))
-        self._row_ids[row] = new_id
-        self.update_numbers()
         self.clear_inputs()
+        # Reload from DB so row order/numbering stay correct and the
+        # inventory + POS windows (which depend on ingredient stock) sync up.
+        self.load_from_db()
+        row = self._find_row_by_id(new_id)
+        if row is not None:
+            self._select_row(row)
         if self.on_change:
             self.on_change()
 
@@ -618,60 +635,68 @@ class IngredientsPage(QWidget):
             QMessageBox.warning(self, "Missing Fields",
                                 "Please fill in Ingredient Name and Stock.")
             return
-        ingredient_id = self._row_ids.get(self.selected_row)
-        if ingredient_id:
-            try:
-                db = get_db_connection()
-                cur = db.cursor()
-                cur.execute(
-                    "UPDATE ingredients SET ingredient_name=%s, stock_left=%s, "
-                    "unit=%s, category=%s WHERE id=%s",
-                    (name, int(stock), self.ef_unit.text(),
-                     self.ef_category.text(), ingredient_id)
-                )
-                db.commit()
-                db.close()
-            except Exception as err:
-                QMessageBox.critical(self, "DB Error", f"Could not update ingredient:\n{err}")
-                return
+        ingredient_id = self._row_ingredient_id(self.selected_row)
+        if ingredient_id is None:
+            QMessageBox.warning(self, "No Selection", "Select a row first!")
+            return
+        try:
+            db = get_db_connection()
+            cur = db.cursor()
+            cur.execute(
+                "UPDATE ingredients SET ingredient_name=%s, stock_left=%s, "
+                "unit=%s, category=%s WHERE id=%s",
+                (name, int(stock), self.ef_unit.text(),
+                 self.ef_category.text(), ingredient_id)
+            )
+            db.commit()
+            db.close()
+        except Exception as err:
+            QMessageBox.critical(self, "DB Error", f"Could not update ingredient:\n{err}")
+            return
 
-        for col, val in enumerate(["", name, stock,
-                                   self.ef_unit.text(), self.ef_category.text()]):
-            self.table.setItem(self.selected_row, col, self._make_cell(val))
-        self.update_numbers()
-        self.action_info.setText(f"Selected:  {name}   |   Stock: {stock}")
         self.edit_form.hide()
+        # Reload from DB, then re-select the same ingredient (rows can
+        # shift since the table re-sorts by category/name) instead of
+        # hand-patching cells, which left the action bar showing stale info.
+        self.load_from_db()
+        row = self._find_row_by_id(ingredient_id)
+        if row is not None:
+            self._select_row(row)
         if self.on_change:
             self.on_change()
 
     def delete_item(self):
         if self.selected_row is None:
             return
-        ingredient_id = self._row_ids.get(self.selected_row)
+        ingredient_id = self._row_ingredient_id(self.selected_row)
         name = (self.table.item(self.selected_row, 1).text()
                 if self.table.item(self.selected_row, 1) else "this item")
+        if ingredient_id is None:
+            QMessageBox.warning(self, "No Selection", "Select a row first!")
+            return
         if QMessageBox.question(
-            self, "Confirm Delete", f"Delete '{name}' from the database?",
+            self, "Confirm Delete",
+            f"Delete '{name}' from the database?\n\n"
+            "This will also remove it from any menu items it's linked to.",
             QMessageBox.Yes | QMessageBox.No
         ) != QMessageBox.Yes:
             return
-        if ingredient_id:
-            try:
-                db = get_db_connection()
-                cur = db.cursor()
-                cur.execute("DELETE FROM ingredients WHERE id = %s", (ingredient_id,))
-                db.commit()
-                db.close()
-            except Exception as err:
-                QMessageBox.critical(self, "DB Error", f"Could not delete ingredient:\n{err}")
-                return
-        self.table.removeRow(self.selected_row)
-        if self.selected_row in self._row_ids:
-            del self._row_ids[self.selected_row]
+        try:
+            db = get_db_connection()
+            cur = db.cursor()
+            cur.execute("DELETE FROM ingredients WHERE id = %s", (ingredient_id,))
+            db.commit()
+            db.close()
+        except Exception as err:
+            QMessageBox.critical(self, "DB Error", f"Could not delete ingredient:\n{err}")
+            return
         self.selected_row = None
-        self.update_numbers()
         self.action_bar.hide()
         self.edit_form.hide()
+        # Reload from DB instead of manually removing the row and shifting
+        # the id-tracking dict — that manual shift was the root cause of
+        # edits/deletes silently targeting the wrong ingredient afterward.
+        self.load_from_db()
         if self.on_change:
             self.on_change()
 
