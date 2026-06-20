@@ -193,7 +193,11 @@ class LoginWindow(QDialog):
         super().__init__()
         self.result_data = None
         self.setWindowTitle("System Login")
-        self.setMinimumSize(1200, 700)
+
+        # Frameless fullscreen — use Qt.Window so QDialog modality still works
+        self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
+        screen = QApplication.primaryScreen().geometry()
+        self.setGeometry(screen)
 
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -203,7 +207,6 @@ class LoginWindow(QDialog):
 
         self._build_form()
         self.form_widget.adjustSize()
-        self._center_window()
 
     def get_result(self):
         return self.result_data
@@ -319,13 +322,6 @@ class LoginWindow(QDialog):
         super().showEvent(event)
         self.form_widget.adjustSize()
         self._reposition_form()
-
-    def _center_window(self):
-        screen = QApplication.primaryScreen().availableGeometry()
-        self.move(
-            screen.x() + (screen.width()  - self.width())  // 2,
-            screen.y() + (screen.height() - self.height()) // 2,
-        )
 
     # ── Authentication ────────────────────────────────────────────────────
     def authenticate(self):
