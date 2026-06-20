@@ -985,8 +985,14 @@ class IMS(QWidget):
         self.report_top_btn.setStyleSheet(NAV_BTN_STYLE)
         drop_shadow(self.report_top_btn, blur=18, alpha=100)
 
+        self.ingredient_top_btn = QPushButton("🧂 INGREDIENTS")
+        self.ingredient_top_btn.setFixedSize(170, 36)
+        self.ingredient_top_btn.setStyleSheet(NAV_BTN_STYLE)
+        drop_shadow(self.ingredient_top_btn, blur=18, alpha=100)
+
         nav_layout.addWidget(self.inventory_top_btn)
         nav_layout.addWidget(self.report_top_btn)
+        nav_layout.addWidget(self.ingredient_top_btn)
 
         self.admin_btn = QPushButton("🚪 LOG OUT")
         self.admin_btn.setFixedSize(130, 36)
@@ -1009,13 +1015,10 @@ class IMS(QWidget):
                 lambda: self.switch_callback("report"))
             self.inventory_top_btn.clicked.connect(
                 lambda: self.switch_callback("inventory"))
+            self.ingredient_top_btn.clicked.connect(
+                lambda: self.switch_callback("ingredients"))
 
         self.admin_btn.clicked.connect(self.admin_clicked)
-
-        # Cashiers don't need inventory / report access from POS screen
-        if self.role != "admin":
-            self.inventory_top_btn.hide()
-            self.report_top_btn.hide()
 
         # MENU SCROLL AREA
         self.scroll_area = DragScrollArea()
@@ -1133,7 +1136,7 @@ class IMS(QWidget):
             has_ingredients = product.get("has_ingredients", False)
 
             card = QFrame()
-            card.setFixedSize(250, 150)
+            card.setFixedSize(300, 200)
 
             if not has_ingredients:
                 # No ingredients linked — card is locked/orange-tinted

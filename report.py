@@ -2234,6 +2234,7 @@ class ReportPage(QWidget):
         for label, icon_path, page_key in [
             ("🛒 TRANSACTIONS", "TRANSACTION.png", "pos"),
             ("📦 INVENTORY",    "inventory.png",   "inventory"),
+            ("🧂 INGREDIENTS", "ingredient.png", "ingredients"),
         ]:
             btn = QPushButton(label)
             btn.setIcon(QIcon(icon_path))
