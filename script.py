@@ -1,7 +1,6 @@
 # This is the script.py (Do not remove line)
 
 import sys
-import copy
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QFrame, QGraphicsDropShadowEffect,
     QPushButton, QScrollArea, QGridLayout, QVBoxLayout, QHBoxLayout,
@@ -109,15 +108,15 @@ class ClockWidget(QWidget):
         layout.addWidget(self.time_lbl)
         layout.addWidget(self.date_lbl)
 
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
-        self._timer.start(1000)
         self._tick()
 
     def _tick(self):
         now = _dt.datetime.now()
         self.time_lbl.setText(now.strftime("%I:%M:%S %p"))
         self.date_lbl.setText(now.strftime("%A, %b %d, %Y"))
+        # Fire exactly at the next second boundary to prevent drift
+        ms_until_next = 1000 - (now.microsecond // 1000)
+        QTimer.singleShot(ms_until_next, self._tick)
 
 
 class DragScrollArea(QScrollArea):
@@ -172,9 +171,7 @@ class PaymentDialog(QDialog):
     def __init__(self, order_rows, total, parent=None):
         super().__init__(parent)
         self.order_rows = order_rows
-        self.original_total = total
         self.order_total = total
-        self.discount_amount = 0
         self.payment_confirmed = False
 
         self.setWindowTitle("Payment")
@@ -289,24 +286,6 @@ class PaymentDialog(QDialog):
         total_row.addWidget(total_lbl)
         total_row.addWidget(self._total_val)
         sf_layout.addLayout(total_row)
-
-        # Discount line (hidden until the PWD/Senior discount is toggled on)
-        discount_row = QHBoxLayout()
-        self._discount_lbl = QLabel("PWD/Senior Discount (20%)")
-        self._discount_lbl.setStyleSheet(
-            "font-size: 11px; font-weight: bold; color: #1e7f3f; background: transparent;"
-        )
-        self._discount_val = QLabel("–₱0")
-        self._discount_val.setStyleSheet(
-            "font-size: 13px; font-weight: bold; color: #1e7f3f; background: transparent;"
-        )
-        self._discount_val.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        discount_row.addWidget(self._discount_lbl)
-        discount_row.addWidget(self._discount_val)
-        sf_layout.addLayout(discount_row)
-        self._discount_lbl.hide()
-        self._discount_val.hide()
-
         bl.addWidget(summary_frame)
 
         # ── Cash tendered ─────────────────────────────────────────────────────
@@ -360,26 +339,6 @@ class PaymentDialog(QDialog):
         cf_layout.addWidget(self.change_val)
 
         left_panel.addWidget(change_frame)
-        left_panel.addSpacing(10)
-
-        # PWD / Senior Discount Button
-        self.discount_btn = QPushButton("👴 PWD/Senior (20% Off)")
-        self.discount_btn.setCheckable(True)
-        self.discount_btn.setFixedHeight(40)
-        self.discount_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #E8D28C; color: #2b2b2b;
-                border: 2px solid #d6c870; border-radius: 8px;
-                font-size: 11px; font-weight: bold;
-            }
-            QPushButton:checked {
-                background-color: #1e7f3f; color: white;
-                border: 2px solid #166330;
-            }
-        """)
-        self.discount_btn.clicked.connect(self._toggle_discount)
-        left_panel.addWidget(self.discount_btn)
-
         left_panel.addStretch()
 
         payment_row.addLayout(left_panel, 2)
@@ -466,28 +425,6 @@ class PaymentDialog(QDialog):
 
     # ── slots ─────────────────────────────────────────────────────────────────
 
-    def _toggle_discount(self, checked):
-        if checked and self.order_rows:
-            # Find the highest unit price in the order — PWD/Senior
-            # discount law applies the 20% off to a single qualifying item.
-            highest_unit_price = max(row['price'] / row['qty'] for row in self.order_rows)
-            self.discount_amount = int(round(highest_unit_price * 0.20))
-        else:
-            self.discount_amount = 0
-
-        self.order_total = self.original_total - self.discount_amount
-        self._total_val.setText(f"₱{self.order_total:,}")
-
-        if self.discount_amount > 0:
-            self._discount_val.setText(f"–₱{self.discount_amount:,}")
-            self._discount_lbl.show()
-            self._discount_val.show()
-        else:
-            self._discount_lbl.hide()
-            self._discount_val.hide()
-
-        self._update_change()
-
     def _update_change(self):
         try:
             cash = int(self.cash_input.text() or 0)
@@ -526,13 +463,6 @@ class PaymentDialog(QDialog):
             QMessageBox.warning(self, "Insufficient Cash",
                                 "Cash tendered must be ≥ the order total.")
             return
-
-        # Deduct the discount explicitly from the highest priced item so
-        # the DB record and the (mutated) order_rows total line up exactly.
-        if self.discount_amount > 0:
-            highest_row = max(self.order_rows, key=lambda r: r['price'] / r['qty'])
-            highest_row['price'] -= self.discount_amount
-
         self.cash_paid = cash
         self.change_given = cash - self.order_total
         self.payment_confirmed = True
@@ -566,15 +496,13 @@ class ReceiptDialog(QDialog):
     STORE_TAGLINE = "Your favorite mango shake destination!"
     RECEIPT_WIDTH = 42   # characters wide for the monospace receipt
 
-    def __init__(self, order_rows, total, cash_paid, change_given, order_id,
-                 discount_amount=0, parent=None):
+    def __init__(self, order_rows, total, cash_paid, change_given, order_id, parent=None):
         super().__init__(parent)
-        self.order_rows      = order_rows
-        self.total           = total
-        self.cash_paid       = cash_paid
-        self.change_given    = change_given
-        self.order_id        = order_id
-        self.discount_amount = discount_amount
+        self.order_rows   = order_rows
+        self.total        = total
+        self.cash_paid    = cash_paid
+        self.change_given = change_given
+        self.order_id     = order_id
 
         self.setWindowTitle(f"Receipt – Order #{order_id}")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
@@ -717,10 +645,6 @@ class ReceiptDialog(QDialog):
             lines.append(label + " " * gap + right)
 
         lines.append(divider())
-        if self.discount_amount:
-            subtotal = self.total + self.discount_amount
-            lines.append(two_col("SUBTOTAL", f"₱{subtotal:,}"))
-            lines.append(two_col("PWD/Senior Discount (20%)", f"–₱{self.discount_amount:,}"))
         lines.append(two_col("TOTAL DUE", f"₱{self.total:,}"))
         lines.append(divider("═"))
         lines.append("")
@@ -1525,31 +1449,23 @@ class IMS(QWidget):
                 order_rows.append(w.data)
                 report_items.append((w.data["name"], w.data["price"]))
 
-        # Keep a pristine (pre-discount) copy of the rows for the receipt --
-        # PaymentDialog may mutate order_rows' prices to apply a discount.
-        receipt_rows = copy.deepcopy(order_rows)
-
         # ── Payment dialog (cash + change calculator) ─────────────────────────
         dlg = PaymentDialog(order_rows, self.order_total, parent=self)
         dlg.exec_()
         if not dlg.payment_confirmed:
             return  # cashier cancelled — keep the order open
 
-        # Retrieve the potentially discounted total and amounts
-        discount_amount = getattr(dlg, "discount_amount", 0)
-        final_total      = getattr(dlg, "order_total", self.order_total)
-        cash_paid        = getattr(dlg, "cash_paid",    final_total)
-        change_given     = getattr(dlg, "change_given", 0)
+        cash_paid    = getattr(dlg, "cash_paid",    self.order_total)
+        change_given = getattr(dlg, "change_given", 0)
 
         # ── Save to DB ────────────────────────────────────────────────────────
-        order_id = save_order_to_db(order_rows, final_total)
+        order_id = save_order_to_db(order_rows, self.order_total)
 
         # ── Show receipt ──────────────────────────────────────────────────────
         receipt = ReceiptDialog(
-            receipt_rows, final_total,
+            order_rows, self.order_total,
             cash_paid, change_given,
             order_id or "—",
-            discount_amount=discount_amount,
             parent=self,
         )
         receipt.exec_()

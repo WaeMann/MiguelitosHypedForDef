@@ -10,9 +10,10 @@ from PyQt5.QtWidgets import (
     QButtonGroup, QTabWidget
 )
 from PyQt5.QtCore import Qt, QSize, QDate, QDateTime, QTimer
-from PyQt5.QtGui import QPixmap, QIcon, QColor
+from PyQt5.QtGui import QPixmap, QIcon, QColor, QFont
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
 from datetime import date, timedelta, datetime
+import datetime as _dt
 
 import matplotlib
 matplotlib.use("Qt5Agg")
@@ -189,6 +190,36 @@ CHART_COLORS = [
 # ─────────────────────────────────────────────────────────────────────────────
 # SHARED HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
+
+class ClockWidget(QWidget):
+    """Live time + date label for the top bar (upper-right)."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(1)
+
+        self.time_lbl = QLabel()
+        self.time_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.time_lbl.setFont(QFont("Segoe UI", 15, QFont.Bold))
+        self.time_lbl.setStyleSheet("color: #2b2b2b; background: transparent;")
+
+        self.date_lbl = QLabel()
+        self.date_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.date_lbl.setFont(QFont("Segoe UI", 9))
+        self.date_lbl.setStyleSheet("color: #555555; background: transparent;")
+
+        layout.addWidget(self.time_lbl)
+        layout.addWidget(self.date_lbl)
+        self._tick()
+
+    def _tick(self):
+        now = _dt.datetime.now()
+        self.time_lbl.setText(now.strftime("%I:%M:%S %p"))
+        self.date_lbl.setText(now.strftime("%A, %b %d, %Y"))
+        ms_until_next = 1000 - (now.microsecond // 1000)
+        QTimer.singleShot(ms_until_next, self._tick)
+
 
 class DragScrollArea(QScrollArea):
     def __init__(self, parent=None):
@@ -2253,6 +2284,15 @@ class ReportPage(QWidget):
         tbl.addStretch()
         tbl.addLayout(nav_layout)
         tbl.addStretch()
+        clock_widget = ClockWidget()
+        tbl.addWidget(clock_widget)
+        tbl.addSpacing(12)
+        self._logout_btn = QPushButton("🚪 LOG OUT")
+        self._logout_btn.setFixedSize(130, 36)
+        self._logout_btn.setStyleSheet(NAV_BTN_STYLE)
+        drop_shadow(self._logout_btn, blur=18, alpha=100)
+        self._logout_btn.clicked.connect(self._admin_clicked)
+        tbl.addWidget(self._logout_btn)
         root.addWidget(top_bar)
 
         # Gold separator under top bar
@@ -2514,6 +2554,16 @@ class ReportPage(QWidget):
         content_grid.addWidget(monthly_panel, 5, 1)
 
     # ── ADMIN BAR ────────────────────────────────────────────────────────────
+
+    def _admin_clicked(self):
+        reply = QMessageBox.question(
+            self, "Log Out",
+            "Are you sure you want to log out?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            QApplication.exit(42)
 
     def _build_admin_bar(self, root: QVBoxLayout):
         bar = QFrame()

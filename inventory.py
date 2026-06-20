@@ -45,15 +45,14 @@ class ClockWidget(QWidget):
         self.date_lbl.setStyleSheet("color: #555555; background: transparent;")
         layout.addWidget(self.time_lbl)
         layout.addWidget(self.date_lbl)
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
-        self._timer.start(1000)
         self._tick()
 
     def _tick(self):
         now = _dt.datetime.now()
         self.time_lbl.setText(now.strftime("%I:%M:%S %p"))
         self.date_lbl.setText(now.strftime("%A, %b %d, %Y"))
+        ms_until_next = 1000 - (now.microsecond // 1000)
+        QTimer.singleShot(ms_until_next, self._tick)
 
 
 def load_sizes_from_db():
@@ -724,6 +723,13 @@ class InventoryPage(QWidget):
         top_bar_layout.addStretch()
         clock_widget = ClockWidget()
         top_bar_layout.addWidget(clock_widget)
+        top_bar_layout.addSpacing(12)
+        self.admin_btn = QPushButton("🚪 LOG OUT")
+        self.admin_btn.setFixedSize(130, 36)
+        self.admin_btn.setStyleSheet(NAV_BTN_STYLE)
+        drop_shadow(self.admin_btn, blur=18, alpha=100)
+        self.admin_btn.clicked.connect(self.admin_clicked)
+        top_bar_layout.addWidget(self.admin_btn)
         root.addWidget(top_bar)
 
         sep = QFrame()
@@ -1060,6 +1066,16 @@ class InventoryPage(QWidget):
         return super().eventFilter(obj, event)
 
     # ── row click → show action bar ───────────────────────────────────────────
+
+    def admin_clicked(self):
+        reply = QMessageBox.question(
+            self, "Log Out",
+            "Are you sure you want to log out?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            QApplication.exit(42)
 
     def _on_row_clicked(self, row, column):
         self.selected_row = row
