@@ -2197,6 +2197,7 @@ class ReportPage(QWidget):
         self.sales_data  = {}
         self.daily_sales = {}
         self._page_period = "all"   # "daily", "weekly", "monthly", "all"
+        self._size_filter = "all"   # "all", "12oz", "16oz"
 
         self.setWindowTitle("Hyped Mangoes — Reports")
         self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
@@ -2209,26 +2210,30 @@ class ReportPage(QWidget):
 
     # ── DB LOAD ──────────────────────────────────────────────────────────────
 
-    def _load_from_db(self, start_date: str = None, end_date: str = None):
-        """Load sales data from DB for the given date range (or all time)."""
+    def _load_from_db(self, start_date: str = None, end_date: str = None,
+                       size_filter: str = None):
+        """Load sales data from DB for the given date range (or all time),
+        optionally restricted to a single size ("12oz"/"16oz"; None/"all" = both)."""
         try:
             db  = get_db_connection()
             cur = db.cursor(dictionary=True)
 
+            item_query = """
+                SELECT oi.product_name, SUM(oi.item_price) AS total
+                FROM order_items oi
+                JOIN orders o ON o.id = oi.order_id
+                WHERE 1=1
+            """
+            item_params = []
             if start_date:
-                cur.execute("""
-                    SELECT oi.product_name, SUM(oi.item_price) AS total
-                    FROM order_items oi
-                    JOIN orders o ON o.id = oi.order_id
-                    WHERE DATE(o.created_at) BETWEEN %s AND %s
-                    GROUP BY oi.product_name
-                """, (start_date, end_date))
-            else:
-                cur.execute("""
-                    SELECT oi.product_name, SUM(oi.item_price) AS total
-                    FROM order_items oi
-                    GROUP BY oi.product_name
-                """)
+                item_query += " AND DATE(o.created_at) BETWEEN %s AND %s"
+                item_params += [start_date, end_date]
+            if size_filter and size_filter != "all":
+                item_query += " AND oi.size_name = %s"
+                item_params.append(size_filter)
+            item_query += " GROUP BY oi.product_name"
+
+            cur.execute(item_query, tuple(item_params))
             for row in cur.fetchall():
                 name = row["product_name"] or "Unknown"
                 self.sales_data[name] = self.sales_data.get(name, 0) + float(row["total"])
@@ -2395,6 +2400,42 @@ class ReportPage(QWidget):
             pfl.addWidget(btn)
 
         pfl.addStretch()
+
+        # ── SIZE FILTER BUTTONS (right side) ───────────────────────────────
+        size_lbl = QLabel("Size:")
+        size_lbl.setStyleSheet(
+            "font-size: 12px; color: #555; font-weight: bold; background: transparent;"
+        )
+        pfl.addWidget(size_lbl)
+
+        SSTYLE_ACTIVE = """
+            QPushButton {
+                background-color: #2b2b2b; color: #E8D28C;
+                font-size: 12px; border-radius: 6px; font-weight: bold;
+                border: none; padding: 4px 16px;
+            }
+        """
+        SSTYLE_INACTIVE = """
+            QPushButton {
+                background-color: #EFE9D1; color: #2b2b2b;
+                font-size: 12px; border-radius: 6px; font-weight: bold;
+                border: 1px solid #c8b87a; padding: 4px 16px;
+            }
+            QPushButton:hover { background-color: #E8D28C; }
+        """
+        self._size_filter_btns = {}
+        for size_key, size_label in [
+            ("all",  "All Sizes"),
+            ("12oz", "12oz"),
+            ("16oz", "16oz"),
+        ]:
+            btn = QPushButton(size_label)
+            btn.setFixedHeight(32)
+            btn.setStyleSheet(SSTYLE_ACTIVE if size_key == "all" else SSTYLE_INACTIVE)
+            btn.clicked.connect(lambda checked, k=size_key: self._set_size_filter(k))
+            self._size_filter_btns[size_key] = btn
+            pfl.addWidget(btn)
+
         content_grid.addWidget(period_filter_panel, 0, 0, 1, 2)
 
         # ── TOTAL SALES CARD ─────────────────────────────────────────────────
@@ -2433,11 +2474,11 @@ class ReportPage(QWidget):
         pie_layout.setContentsMargins(16, 14, 16, 14)
         pie_layout.setSpacing(8)
 
-        pie_title = QLabel("Sales Breakdown by Item")
-        pie_title.setStyleSheet(
+        self.pie_title_lbl = QLabel("Sales Breakdown by Item")
+        self.pie_title_lbl.setStyleSheet(
             "font-size: 16px; font-weight: bold; color: #2b2b2b; background: transparent;"
         )
-        pie_layout.addWidget(pie_title)
+        pie_layout.addWidget(self.pie_title_lbl)
 
         self.pie_canvas = FigureCanvas(Figure(figsize=(5, 4), facecolor="#FFFFFF"))
         self.pie_canvas.setMinimumHeight(320)
@@ -2453,11 +2494,11 @@ class ReportPage(QWidget):
         tracker_outer.setContentsMargins(16, 14, 16, 14)
         tracker_outer.setSpacing(8)
 
-        tracker_title = QLabel("Item Sales Breakdown")
-        tracker_title.setStyleSheet(
+        self.tracker_title_lbl = QLabel("Item Sales Breakdown")
+        self.tracker_title_lbl.setStyleSheet(
             "font-size: 16px; font-weight: bold; color: #2b2b2b; background: transparent;"
         )
-        tracker_outer.addWidget(tracker_title)
+        tracker_outer.addWidget(self.tracker_title_lbl)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -2717,12 +2758,39 @@ class ReportPage(QWidget):
             btn.setStyleSheet(PSTYLE_ACTIVE if p == period else PSTYLE_INACTIVE)
         self.reload_from_db_and_refresh()
 
+    def _set_size_filter(self, size: str):
+        """Switch the item-breakdown size filter (All Sizes / 12oz / 16oz) and reload."""
+        self._size_filter = size
+        SSTYLE_ACTIVE = """
+            QPushButton {
+                background-color: #2b2b2b; color: #E8D28C;
+                font-size: 12px; border-radius: 6px; font-weight: bold;
+                border: none; padding: 4px 16px;
+            }
+        """
+        SSTYLE_INACTIVE = """
+            QPushButton {
+                background-color: #EFE9D1; color: #2b2b2b;
+                font-size: 12px; border-radius: 6px; font-weight: bold;
+                border: 1px solid #c8b87a; padding: 4px 16px;
+            }
+            QPushButton:hover { background-color: #E8D28C; }
+        """
+        for k, btn in self._size_filter_btns.items():
+            btn.setStyleSheet(SSTYLE_ACTIVE if k == size else SSTYLE_INACTIVE)
+
+        suffix = "" if size == "all" else f" — {size}"
+        self.pie_title_lbl.setText(f"Sales Breakdown by Item{suffix}")
+        self.tracker_title_lbl.setText(f"Item Sales Breakdown{suffix}")
+
+        self.reload_from_db_and_refresh()
+
     def reload_from_db_and_refresh(self):
         """Reload all sales data fresh from DB using the current period, then re-render."""
         self.sales_data  = {}
         self.daily_sales = {}
         start_str, end_str = self._get_page_period_range()
-        self._load_from_db(start_str, end_str)
+        self._load_from_db(start_str, end_str, self._size_filter)
         self.refresh_report()
         self._load_and_plot()
 
