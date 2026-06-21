@@ -77,7 +77,18 @@ CREATE TABLE IF NOT EXISTS ingredients (
     ingredient_name VARCHAR(150) NOT NULL,
     stock_left      INT DEFAULT 0,
     unit            VARCHAR(50),
-    category        VARCHAR(100)
+    category        VARCHAR(100),
+    expiry_date     DATE DEFAULT NULL
+);
+
+-- ── INGREDIENT BATCHES (FEFO — First-Expired, First-Out deduction) ────────
+CREATE TABLE IF NOT EXISTS ingredient_batches (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    ingredient_id INT NOT NULL,
+    quantity      DECIMAL(10,3) NOT NULL DEFAULT 0,
+    expiry_date   DATE DEFAULT NULL,
+    received_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS product_ingredients (

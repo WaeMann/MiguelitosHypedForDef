@@ -893,11 +893,41 @@ def save_order_to_db(order_rows, total, discount_amount=0,
                 for link in cur.fetchall():
                     ingredient_id = link[0]
                     amount_used   = link[1]
+                    amount_needed = float(amount_used) * row_data["qty"]
+
+                    # 1. Update the master total in `ingredients` so the UI tables stay accurate
                     cur.execute("""
                         UPDATE ingredients
                         SET stock_left = GREATEST(0, stock_left - %s)
                         WHERE id = %s
-                    """, (float(amount_used) * row_data["qty"], ingredient_id))
+                    """, (amount_needed, ingredient_id))
+
+                    # 2. FEFO Deduction: Fetch batches ordered by oldest expiry first
+                    cur.execute("""
+                        SELECT id, quantity
+                        FROM ingredient_batches
+                        WHERE ingredient_id = %s AND quantity > 0
+                        ORDER BY expiry_date ASC
+                    """, (ingredient_id,))
+
+                    batches = cur.fetchall()
+
+                    # 3. Deduct from oldest batches until the needed amount is fulfilled
+                    for batch in batches:
+                        if amount_needed <= 0:
+                            break
+
+                        batch_id = batch[0]
+                        batch_qty = float(batch[1])
+
+                        if batch_qty <= amount_needed:
+                            # Use up this entire old batch
+                            cur.execute("UPDATE ingredient_batches SET quantity = 0 WHERE id = %s", (batch_id,))
+                            amount_needed -= batch_qty
+                        else:
+                            # Partially use this batch
+                            cur.execute("UPDATE ingredient_batches SET quantity = quantity - %s WHERE id = %s", (amount_needed, batch_id))
+                            amount_needed = 0
 
         db.commit()
         db.close()

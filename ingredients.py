@@ -5,10 +5,10 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableWidget, QTableWidgetItem,
     QLabel, QLineEdit, QFrame, QHeaderView, QMessageBox,
-    QGraphicsDropShadowEffect, QSizePolicy
+    QGraphicsDropShadowEffect, QSizePolicy, QDateEdit
 )
 from PyQt5.QtGui import QPixmap, QIcon, QIntValidator, QColor, QMouseEvent
-from PyQt5.QtCore import Qt, QSize, QEvent, QTimer
+from PyQt5.QtCore import Qt, QSize, QEvent, QTimer, QDate
 import datetime as _dt
 from PyQt5.QtGui import QPixmap, QIcon, QIntValidator, QColor
 
@@ -106,7 +106,7 @@ QPushButton:hover { background-color: #a93226; }
 """
 
 INPUT_STYLE = """
-QLineEdit {
+QLineEdit, QDateEdit {
     background-color: #fafaf7;
     border: 2px solid #d6d2c4;
     border-radius: 8px;
@@ -114,9 +114,13 @@ QLineEdit {
     font-size: 14px;
     color: #2c3e50;
 }
-QLineEdit:focus {
+QLineEdit:focus, QDateEdit:focus {
     border: 2px solid #34699A;
     background-color: white;
+}
+QDateEdit::drop-down {
+    border: none;
+    width: 24px;
 }
 """
 
@@ -298,8 +302,8 @@ class IngredientsPage(QWidget):
         )
         table_panel_layout.addWidget(panel_title)
 
-        self.table = DragScrollTable(0, 5)
-        self.table.setHorizontalHeaderLabels(["#", "Ingredient Name", "Stock Left", "Unit", "Category"])
+        self.table = DragScrollTable(0, 6)
+        self.table.setHorizontalHeaderLabels(["#", "Ingredient Name", "Stock Left", "Unit", "Category", "Expiry Date (yyyy-mm-dd)"])
         self.table.setStyleSheet(TABLE_STYLE)
         self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -411,12 +415,21 @@ class IngredientsPage(QWidget):
         self.ef_category.setFixedWidth(150)
         self.ef_category.setFixedHeight(36)
 
+        self.ef_expiry = QDateEdit()
+        self.ef_expiry.setCalendarPopup(True)
+        self.ef_expiry.setDisplayFormat("yyyy-MM-dd")
+        self.ef_expiry.setDate(QDate.currentDate())
+        self.ef_expiry.setStyleSheet(INPUT_STYLE)
+        self.ef_expiry.setFixedWidth(130)
+        self.ef_expiry.setFixedHeight(36)
+
         fields_row = QHBoxLayout()
         fields_row.setSpacing(12)
         fields_row.addLayout(ef_col("INGREDIENT NAME", self.ef_name), stretch=1)
         fields_row.addLayout(ef_col("STOCK LEFT",      self.ef_stock))
         fields_row.addLayout(ef_col("UNIT",            self.ef_unit))
         fields_row.addLayout(ef_col("CATEGORY",        self.ef_category))
+        fields_row.addLayout(ef_col("EXPIRY DATE",     self.ef_expiry))
 
         save_ef = QPushButton("✔  Save")
         save_ef.setFixedSize(120, 36)
@@ -488,6 +501,12 @@ class IngredientsPage(QWidget):
         self.category.setPlaceholderText("e.g. Fruit")
         self.category.setStyleSheet(INPUT_STYLE)
 
+        self.expiry_date = QDateEdit()
+        self.expiry_date.setCalendarPopup(True)
+        self.expiry_date.setDisplayFormat("yyyy-MM-dd")
+        self.expiry_date.setDate(QDate.currentDate())
+        self.expiry_date.setStyleSheet(INPUT_STYLE)
+
         form_panel_layout.addWidget(field_label("Ingredient Name"))
         form_panel_layout.addWidget(self.name)
         form_panel_layout.addWidget(field_label("Stock Left"))
@@ -496,6 +515,8 @@ class IngredientsPage(QWidget):
         form_panel_layout.addWidget(self.unit)
         form_panel_layout.addWidget(field_label("Category"))
         form_panel_layout.addWidget(self.category)
+        form_panel_layout.addWidget(field_label("Expiry Date"))
+        form_panel_layout.addWidget(self.expiry_date)
         form_panel_layout.addSpacing(10)
 
         add_btn = QPushButton("＋  ADD ITEM")
@@ -564,6 +585,13 @@ class IngredientsPage(QWidget):
         self.ef_unit.setText(    self.table.item(row, 3).text() if self.table.item(row, 3) else "")
         self.ef_category.setText(self.table.item(row, 4).text() if self.table.item(row, 4) else "")
 
+        # Pre-fill expiry date from the table; default to today if blank
+        exp_text = self.table.item(row, 5).text() if self.table.item(row, 5) else ""
+        if exp_text:
+            self.ef_expiry.setDate(QDate.fromString(exp_text, "yyyy-MM-dd"))
+        else:
+            self.ef_expiry.setDate(QDate.currentDate())
+
     # ── toggle edit form ──────────────────────────────────────────────────────
 
     def _toggle_edit_form(self):
@@ -581,7 +609,7 @@ class IngredientsPage(QWidget):
             db = get_db_connection()
             cur = db.cursor(dictionary=True)
             cur.execute(
-                "SELECT id, ingredient_name, stock_left, unit, category "
+                "SELECT id, ingredient_name, stock_left, unit, category, expiry_date "
                 "FROM ingredients ORDER BY category, ingredient_name"
             )
             rows = cur.fetchall()
@@ -590,12 +618,14 @@ class IngredientsPage(QWidget):
                 row = self.table.rowCount()
                 self.table.insertRow(row)
                 self.table.setRowHeight(row, 40)
+                exp_date = str(ingredient["expiry_date"]) if ingredient["expiry_date"] else ""
                 for col, val in enumerate([
                     str(row + 1),
                     ingredient["ingredient_name"],
                     str(ingredient["stock_left"]),
                     ingredient["unit"]     or "",
                     ingredient["category"] or "",
+                    exp_date,
                 ]):
                     self.table.setItem(row, col, self._make_cell(val))
                 # Store the DB id on the row itself rather than in a
@@ -643,13 +673,14 @@ class IngredientsPage(QWidget):
         if not self.name.text() or not self.stock.text():
             QMessageBox.warning(self, "Missing Fields", "Please fill in Ingredient Name and Stock.")
             return
+        expiry_val = self.expiry_date.date().toString("yyyy-MM-dd")
         try:
             db = get_db_connection()
             cur = db.cursor()
             cur.execute(
-                "INSERT INTO ingredients (ingredient_name, stock_left, unit, category) "
-                "VALUES (%s, %s, %s, %s)",
-                (self.name.text(), int(self.stock.text()), self.unit.text(), self.category.text())
+                "INSERT INTO ingredients (ingredient_name, stock_left, unit, category, expiry_date) "
+                "VALUES (%s, %s, %s, %s, %s)",
+                (self.name.text(), int(self.stock.text()), self.unit.text(), self.category.text(), expiry_val)
             )
             new_id = cur.lastrowid
             db.commit()
@@ -687,14 +718,15 @@ class IngredientsPage(QWidget):
         if ingredient_id is None:
             QMessageBox.warning(self, "No Selection", "Select a row first!")
             return
+        expiry_val = self.ef_expiry.date().toString("yyyy-MM-dd")
         try:
             db = get_db_connection()
             cur = db.cursor()
             cur.execute(
                 "UPDATE ingredients SET ingredient_name=%s, stock_left=%s, "
-                "unit=%s, category=%s WHERE id=%s",
+                "unit=%s, category=%s, expiry_date=%s WHERE id=%s",
                 (name, int(stock), self.ef_unit.text(),
-                 self.ef_category.text(), ingredient_id)
+                 self.ef_category.text(), expiry_val, ingredient_id)
             )
             db.commit()
             db.close()
@@ -753,6 +785,7 @@ class IngredientsPage(QWidget):
         self.stock.clear()
         self.unit.clear()
         self.category.clear()
+        self.expiry_date.setDate(QDate.currentDate())
 
 
 if __name__ == "__main__":
