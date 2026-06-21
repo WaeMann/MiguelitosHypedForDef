@@ -2276,7 +2276,7 @@ class ReportPage(QWidget):
         logo = QLabel()
         px = QPixmap("hypedmangologo.png")
         if not px.isNull():
-            logo.setPixmap(px.scaled(160, 65, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            logo.setPixmap(px.scaled(200, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         else:
             logo.setText("🥭 Hyped Mangoes")
             logo.setStyleSheet("font-size: 20px; font-weight: bold; color: #2b2b2b;")

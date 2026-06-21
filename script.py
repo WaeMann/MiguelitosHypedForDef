@@ -922,30 +922,30 @@ class IMS(QWidget):
             load_products_from_db()
 
         self.setWindowTitle("Inventory Management System")
-        self.setStyleSheet("QWidget { background-color: #DED6B2; }")
+        self.setStyleSheet("QWidget { background-color: #DED6B2; font-family: 'Segoe UI'; }")
         # Prevent this page's sizeHint from driving the parent window's size.
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
-        root = QHBoxLayout(self)
+        root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
+
+        # content_row holds sidebar + main_area side-by-side, below the full-width top bar
+        content_row = QWidget()
+        content_row.setStyleSheet("background-color: #DED6B2;")
+        content_layout = QHBoxLayout(content_row)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
 
         # ── SIDEBAR ──────────────────────────────────────────────────────────
         sidebar = QWidget()
         sidebar.setFixedWidth(338)
         sidebar.setStyleSheet("background-color: #DED6B2;")
-        root.addWidget(sidebar)
+        content_layout.addWidget(sidebar)
 
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(27, 10, 11, 10)
         sidebar_layout.setSpacing(12)
-
-        self.title_logo = QLabel()
-        self.title_logo.setFixedHeight(110)
-        self.title_logo.setAlignment(Qt.AlignCenter)
-        self.title_logo.setStyleSheet("background: transparent;")
-        self._set_pixmap(self.title_logo, "hypedmangologo.png", 300, 110)
-        sidebar_layout.addWidget(self.title_logo)
 
         yellow_card = QFrame()
         yellow_card.setStyleSheet("background-color: #E8D28C; border-radius: 20px;")
@@ -1036,22 +1036,21 @@ class IMS(QWidget):
         bottom_row.addWidget(self.complete_order_btn)
         yellow_layout.addLayout(bottom_row)
 
-        # ── MAIN AREA ─────────────────────────────────────────────────────────
-        main_area = QWidget()
-        main_area.setStyleSheet("background-color: #DED6B2;")
-        root.addWidget(main_area, stretch=1)
-
-        main_area_layout = QVBoxLayout(main_area)
-        main_area_layout.setContentsMargins(0, 0, 0, 0)
-        main_area_layout.setSpacing(0)
-
-        # TOP BAR
+        # ── TOP BAR (full-width, spans sidebar and main area) ────────────────
         top_bar = QFrame()
         top_bar.setFixedHeight(80)
         top_bar.setStyleSheet("background-color: #DED6B2;")
         top_bar_layout = QHBoxLayout(top_bar)
-        top_bar_layout.setContentsMargins(24, 0, 16, 0)
+        top_bar_layout.setContentsMargins(24, 0, 24, 0)
         top_bar_layout.setSpacing(10)
+
+        logo = QLabel()
+        px = QPixmap("hypedmangologo.png")
+        if not px.isNull():
+            logo.setPixmap(px.scaled(200, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            logo.setText("🥭 Hyped Mangoes")
+            logo.setStyleSheet("font-size: 20px; font-weight: bold; color: #2b2b2b;")
 
         nav_layout = QHBoxLayout()
         nav_layout.setSpacing(8)
@@ -1080,6 +1079,7 @@ class IMS(QWidget):
         self.admin_btn.setStyleSheet(NAV_BTN_STYLE)
         drop_shadow(self.admin_btn, blur=18, alpha=100)
 
+        top_bar_layout.addWidget(logo)
         top_bar_layout.addStretch()
         top_bar_layout.addLayout(nav_layout)
         top_bar_layout.addStretch()
@@ -1088,7 +1088,23 @@ class IMS(QWidget):
         top_bar_layout.addSpacing(12)
         top_bar_layout.addWidget(self.admin_btn)
 
-        main_area_layout.addWidget(top_bar)
+        root.addWidget(top_bar)
+
+        sep = QFrame()
+        sep.setFixedHeight(2)
+        sep.setStyleSheet("background-color: #c8b87a;")
+        root.addWidget(sep)
+
+        root.addWidget(content_row, stretch=1)
+
+        # ── MAIN AREA ─────────────────────────────────────────────────────────
+        main_area = QWidget()
+        main_area.setStyleSheet("background-color: #DED6B2;")
+        content_layout.addWidget(main_area, stretch=1)
+
+        main_area_layout = QVBoxLayout(main_area)
+        main_area_layout.setContentsMargins(0, 0, 0, 0)
+        main_area_layout.setSpacing(0)
 
         # ── Wire nav buttons ──────────────────────────────────────────────────
         if self.switch_callback:
