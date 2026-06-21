@@ -1478,6 +1478,18 @@ class IMS(QWidget):
                     and existing_row.data["name"] == self.selected_item
                     and existing_row.data["size"] == size
             ):
+                # ── Stock check before updating existing row ──────────────────
+                available_stock = product.get("stock", 0)
+                total_if_added = existing_row.data["qty"] + qty
+                if total_if_added > available_stock:
+                    QMessageBox.warning(
+                        self, "Insufficient Stock",
+                        f"Cannot add {qty} more of \"{self.selected_item}\".\n"
+                        f"Available stock: {available_stock}\n"
+                        f"Already in order: {existing_row.data['qty']}"
+                    )
+                    return
+
                 # Update quantity
                 existing_row.data["qty"] += qty
 
@@ -1501,6 +1513,16 @@ class IMS(QWidget):
                 return
 
         # No existing row found → create a new one
+
+        # ── Stock check before creating new row ───────────────────────────────
+        available_stock = product.get("stock", 0)
+        if qty > available_stock:
+            QMessageBox.warning(
+                self, "Insufficient Stock",
+                f"Cannot add \"{self.selected_item}\" ×{qty}.\n"
+                f"Only {available_stock} unit(s) available in stock."
+            )
+            return
 
         self.order_total += added_price
         self.total_label.setText(f"Total: ₱{self.order_total}")
@@ -1684,6 +1706,51 @@ class IMS(QWidget):
         # Keep a pristine (pre-discount) copy of the rows for the receipt --
         # PaymentDialog may mutate order_rows' prices to apply a discount.
         receipt_rows = copy.deepcopy(order_rows)
+
+        # ── Live stock check before opening the payment dialog ─────────────────
+        insufficient = []
+        try:
+            _db = get_db_connection()
+            _cur = _db.cursor(dictionary=True)
+            for item in order_rows:
+                pid = item.get("product_id")
+                if not pid:
+                    continue
+                _cur.execute("""
+                    SELECT pi.ingredient_id, pi.amount_used, i.stock_left
+                    FROM product_ingredients pi
+                    JOIN ingredients i ON pi.ingredient_id = i.id
+                    WHERE pi.product_id = %s
+                """, (pid,))
+                links = _cur.fetchall()
+                if links:
+                    valid_links = [lnk for lnk in links if lnk["amount_used"] > 0]
+                    live_stock = min(
+                        int(lnk["stock_left"] / lnk["amount_used"])
+                        for lnk in valid_links
+                    ) if valid_links else 0
+                else:
+                    _cur.execute("SELECT stock FROM products WHERE id = %s", (pid,))
+                    prow = _cur.fetchone()
+                    live_stock = int(prow["stock"]) if prow else 0
+
+                if item["qty"] > live_stock:
+                    insufficient.append(
+                        f"  • {item['name']}: ordered {item['qty']}, "
+                        f"only {live_stock} available"
+                    )
+            _db.close()
+        except Exception as _err:
+            print(f"[DB] Stock check error: {_err}")
+
+        if insufficient:
+            QMessageBox.warning(
+                self, "Insufficient Stock",
+                "Cannot complete order — the following items exceed available stock:\n\n"
+                + "\n".join(insufficient)
+                + "\n\nPlease adjust quantities before proceeding."
+            )
+            return
 
         # ── Payment dialog (cash + change calculator) ─────────────────────────
         dlg = PaymentDialog(order_rows, self.order_total, parent=self)

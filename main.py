@@ -117,12 +117,8 @@ if __name__ == "__main__":
         window.close()
 
         if exit_code != LOGOUT_CODE:
-            # Normal close (user hit X), not a logout request
             break
 
-        # Logout requested: close out the session in the DB so that
-        # report.py's Sessions tab actually shows a Logout Time/Duration
-        # instead of leaving the row stuck as "Active" forever.
         session_id = data.get("session_id")
         if session_id:
             try:
