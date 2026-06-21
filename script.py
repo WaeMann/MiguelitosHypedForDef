@@ -1003,12 +1003,19 @@ class IMS(QWidget):
         self.yellow_text.setStyleSheet(
             "color: black; font-size: 15px; font-weight: bold; background: transparent;"
         )
+        self.category_text = QLabel("")
+        self.category_text.setStyleSheet(
+            "color: #555555; font-size: 12px; font-weight: normal; background: transparent;"
+        )
+        self.category_text.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.price_text = QLabel("₱0")
         self.price_text.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         self.price_text.setStyleSheet(
             "color: black; font-size: 15px; font-weight: bold; background: transparent;"
         )
         name_price_row.addWidget(self.yellow_text)
+        name_price_row.addWidget(self.category_text)
+        name_price_row.addStretch()
         name_price_row.addWidget(self.price_text)
         yellow_layout.addLayout(name_price_row)
 
@@ -1038,6 +1045,12 @@ class IMS(QWidget):
         qty_col.addWidget(qty_lbl)
         qty_col.addWidget(self.combo1)
 
+        self.subtract_item_btn = QPushButton("SUBTRACT ITEM")
+        self.subtract_item_btn.setStyleSheet(RED_BTN_STYLE)
+        self.subtract_item_btn.setFixedHeight(40)
+        self.subtract_item_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.subtract_item_btn.clicked.connect(self.subtract_item)
+
         self.add_item_btn = QPushButton("ADD ITEM")
         self.add_item_btn.setStyleSheet(BLUE_BTN_STYLE)
         self.add_item_btn.setFixedHeight(40)
@@ -1045,6 +1058,7 @@ class IMS(QWidget):
         self.add_item_btn.clicked.connect(self.button_clicked)
 
         controls_row.addLayout(qty_col)
+        controls_row.addWidget(self.subtract_item_btn, alignment=Qt.AlignBottom)
         controls_row.addWidget(self.add_item_btn, alignment=Qt.AlignBottom)
         yellow_layout.addLayout(controls_row)
 
@@ -1430,6 +1444,7 @@ class IMS(QWidget):
         self.selected_item = name
         self.selected_product = product
         self.yellow_text.setText(name)
+        self.category_text.setText(product.get("category_name", ""))
         self.update_price_display()
         image_path = product.get("image_path") or "images/default.png"
         self.set_menu_preview_image(image_path)
@@ -1538,6 +1553,47 @@ class IMS(QWidget):
         )
         self.set_order_preview_image(row.data.get("image", "images/default.png"))
 
+    def subtract_item(self):
+        """Subtract the selected quantity (combo1) from the currently highlighted order row."""
+        if not self.selected_order_row:
+            return
+
+        row = self.selected_order_row
+        qty_to_subtract = int(self.combo1.currentText())
+
+        # Derive the per-unit price from the row's current price and qty
+        unit_price = row.data["price"] // max(1, row.data["qty"])
+
+        new_qty = row.data["qty"] - qty_to_subtract
+
+        # Never go below zero — remove the row entirely if qty hits 0
+        if new_qty <= 0:
+            self.order_total = max(0, self.order_total - row.data["price"])
+            self.total_label.setText(f"Total: ₱{self.order_total}")
+            self.order_layout.removeWidget(row)
+            row.deleteLater()
+            self.selected_order_row = None
+            self.change_text.setText("ITEMS TO BE CHANGED:")
+            self.bottom_box.hide()
+            for i in range(self.order_layout.count()):
+                w = self.order_layout.itemAt(i).widget()
+                if w:
+                    w.setStyleSheet("QFrame { background-color: #f5f5f5; border-radius: 6px; }")
+        else:
+            old_price = row.data["price"]
+            new_price = unit_price * new_qty
+            self.order_total = max(0, self.order_total - old_price + new_price)
+            self.total_label.setText(f"Total: ₱{self.order_total}")
+
+            row.data["qty"] = new_qty
+            row.data["price"] = new_price
+            row.qty_label.setText(f"Q: {new_qty}")
+            row.price_label.setText(f"₱{new_price}")
+            self.change_text.setText(
+                f"ITEMS TO BE CHANGED: {row.data['name']} | "
+                f"Q: {new_qty} | S: {row.data['size']} | ₱{new_price}"
+            )
+
     def remove_selected_order(self):
         if not self.selected_order_row:
             return
@@ -1560,6 +1616,44 @@ class IMS(QWidget):
         base     = float(product.get("base_price", 0))
         new_price = int(base * self.size_mult.get(new_size, 1.0)) * new_qty
 
+        # If another row already has the same name + new size, merge into it
+        for i in range(self.order_layout.count()):
+            existing_row = self.order_layout.itemAt(i).widget()
+            if (
+                existing_row
+                and existing_row is not row
+                and hasattr(existing_row, "data")
+                and existing_row.data["name"] == row.data["name"]
+                and existing_row.data["size"] == new_size
+            ):
+                merged_qty   = existing_row.data["qty"] + new_qty
+                merged_price = int(base * self.size_mult.get(new_size, 1.0)) * merged_qty
+
+                self.order_total = max(
+                    0,
+                    self.order_total - row.data["price"] - existing_row.data["price"] + merged_price
+                )
+                self.total_label.setText(f"Total: ₱{self.order_total}")
+
+                existing_row.data["qty"]   = merged_qty
+                existing_row.data["price"] = merged_price
+                existing_row.qty_label.setText(f"Q: {merged_qty}")
+                existing_row.size_label.setText(f"S: {new_size}")
+                existing_row.price_label.setText(f"₱{merged_price}")
+
+                self.order_layout.removeWidget(row)
+                row.deleteLater()
+                self.selected_order_row = None
+                self.change_text.setText("ITEMS TO BE CHANGED:")
+                self.bottom_box.hide()
+
+                for j in range(self.order_layout.count()):
+                    w = self.order_layout.itemAt(j).widget()
+                    if w:
+                        w.setStyleSheet("QFrame { background-color: #f5f5f5; border-radius: 6px; }")
+                return
+
+        # No matching row — update in-place
         self.order_total = max(0, self.order_total - row.data["price"] + new_price)
         self.total_label.setText(f"Total: ₱{self.order_total}")
 
@@ -1645,6 +1739,7 @@ class IMS(QWidget):
         self.selected_product = None
         self.selected_order_row = None
         self.yellow_text.setText("Item Name")
+        self.category_text.setText("")
         self.price_text.setText("₱0")
         self.red_image.clear()
         self.bottom_box.hide()
