@@ -76,6 +76,17 @@ QComboBox QAbstractItemView {
 }
 """
 
+RED_BTN_STYLE = """
+QPushButton {
+    background-color: #C0392B;
+    color: white;
+    font-size: 13px;
+    border-radius: 10px;
+    padding: 4px 10px;
+}
+QPushButton:hover { background-color: #922B21; }
+"""
+
 
 # ---------------------------------------------------------------------------
 # Custom widgets
@@ -1178,7 +1189,7 @@ class IMS(QWidget):
         self.bottom_combo2.setStyleSheet(COMBO_STYLE)
 
         self.remove_btn = QPushButton("REMOVE ITEM")
-        self.remove_btn.setStyleSheet(BLUE_BTN_STYLE)
+        self.remove_btn.setStyleSheet(RED_BTN_STYLE)
         self.remove_btn.setFixedHeight(40)
         self.remove_btn.clicked.connect(self.remove_selected_order)
 

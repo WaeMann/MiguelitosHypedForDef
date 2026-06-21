@@ -66,7 +66,7 @@ def build_app(role):
 if __name__ == "__main__":
     # Verify DB connection before importing the full GUI modules.
     try:
-        from db import get_db_connection
+        from db import get_db_connection, end_session, audit
         print("main: testing DB connection before importing Qt modules", flush=True)
         db = get_db_connection()
         db.close()
@@ -119,6 +119,21 @@ if __name__ == "__main__":
         if exit_code != LOGOUT_CODE:
             # Normal close (user hit X), not a logout request
             break
+
+        # Logout requested: close out the session in the DB so that
+        # report.py's Sessions tab actually shows a Logout Time/Duration
+        # instead of leaving the row stuck as "Active" forever.
+        session_id = data.get("session_id")
+        if session_id:
+            try:
+                sdb = get_db_connection()
+                end_session(sdb, session_id, "manual")
+                audit(sdb, data.get("uid"), data.get("username"),
+                      "LOGOUT", f"Session {session_id}")
+                sdb.commit()
+                sdb.close()
+            except Exception as err:
+                print(f"main: failed to close out session on logout: {err}", flush=True)
         # else: loop back to show login again
 
     sys.exit(0)
