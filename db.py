@@ -41,13 +41,16 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 
+_schema_ensured = False
+
+
 def get_db_connection():
     if not DB_AVAILABLE:
         raise RuntimeError(
             "mysql-connector-python is not installed. "
             "Run: pip install mysql-connector-python"
         )
-    return mysql.connector.connect(
+    conn = mysql.connector.connect(
         host="localhost",
         port="3306",
         user="root",
@@ -55,6 +58,31 @@ def get_db_connection():
         database="pos_system",
         connection_timeout=5,
     )
+    global _schema_ensured
+    if not _schema_ensured:
+        _ensure_schema(conn)
+        _schema_ensured = True
+    return conn
+
+
+def _ensure_schema(db):
+    """Idempotently add columns introduced after the original schema design
+    (PWD/Senior discount tracking on orders). Safe to call repeatedly --
+    duplicate-column errors are swallowed so this works across MySQL
+    versions that don't support ADD COLUMN IF NOT EXISTS."""
+    cur = db.cursor()
+    migrations = [
+        "ALTER TABLE orders ADD COLUMN discount_amount DECIMAL(10,2) DEFAULT 0",
+        "ALTER TABLE orders ADD COLUMN cash_paid DECIMAL(10,2) DEFAULT NULL",
+        "ALTER TABLE orders ADD COLUMN change_given DECIMAL(10,2) DEFAULT NULL",
+    ]
+    for stmt in migrations:
+        try:
+            cur.execute(stmt)
+        except mysql.connector.Error as err:
+            if err.errno != 1060:  # 1060 = ER_DUP_FIELDNAME (column already exists)
+                print(f"[DB] Schema migration warning: {err}")
+    db.commit()
 
 
 # ── Logging / session / audit helpers ────────────────────────────────────

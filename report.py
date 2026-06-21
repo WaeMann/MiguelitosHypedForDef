@@ -339,7 +339,13 @@ STORE_INFO = {
 }
 
 class ReceiptDialog(QDialog):
-    """Thermal-style receipt viewer for a past order."""
+    """Receipt viewer for a past order — styled to match the checkout receipt
+    in script.py (same header/footer copy, column layout, peso formatting,
+    and discount breakdown) so cashiers see a consistent receipt everywhere."""
+
+    STORE_NAME    = "MIGUELITO'S HYPE MANGO"
+    STORE_TAGLINE = "Your favorite mango shake destination!"
+    RECEIPT_WIDTH = 42   # characters wide for the monospace receipt
 
     def __init__(self, order_id: int, order_total: float,
                  order_date: str, parent=None):
@@ -353,12 +359,7 @@ class ReceiptDialog(QDialog):
         self.setWindowTitle(f"Receipt – Order #{order_id}")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setFixedSize(480, 640)
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #EFE9D1;
-                font-family: 'Segoe UI';
-            }
-        """)
+        self.setStyleSheet("QDialog { background-color: #FFFDF7; }")
         self._build()
         _center_dialog(self)
 
@@ -388,50 +389,49 @@ class ReceiptDialog(QDialog):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Header bar ──────────────────────────────────────────────────────
+        # ── Header bar (amber, matching the checkout receipt) ────────────────
         hdr = QFrame()
-        hdr.setFixedHeight(52)
-        hdr.setStyleSheet("background-color: #2b2b2b; cursor: move;")
+        hdr.setFixedHeight(56)
+        hdr.setStyleSheet("background-color: #E8D28C; cursor: move;")
         self._hdr = hdr   # keep reference for drag-zone check
         hl = QHBoxLayout(hdr)
-        hl.setContentsMargins(16, 0, 16, 0)
-        title_lbl = QLabel(f"🧾  Receipt – Order #{self.order_id}")
-        title_lbl.setStyleSheet(
-            "font-size: 15px; font-weight: bold; color: #E8D28C; background: transparent;"
-        )
+        hl.setContentsMargins(20, 0, 20, 0)
+        hl.setSpacing(10)
+        title_lbl = QLabel("🧾  Order Receipt")
+        title_lbl.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        title_lbl.setStyleSheet("color: #2b2b2b; background: transparent;")
         hl.addWidget(title_lbl)
         hl.addStretch()
         close_btn_hdr = QPushButton("✕")
         close_btn_hdr.setFixedSize(28, 28)
         close_btn_hdr.setStyleSheet("""
             QPushButton {
-                background: transparent; color: #E8D28C;
+                background: transparent; color: #2b2b2b;
                 border: none; font-size: 14px; font-weight: bold;
             }
-            QPushButton:hover { background: rgba(255,255,255,0.15); border-radius: 6px; }
+            QPushButton:hover { background: rgba(0,0,0,0.12); border-radius: 6px; }
         """)
         close_btn_hdr.clicked.connect(self.reject)
         hl.addWidget(close_btn_hdr)
         root.addWidget(hdr)
 
-        # Gold accent line
-        acc = QFrame()
-        acc.setFixedHeight(3)
-        acc.setStyleSheet("background-color: #E8D28C;")
-        root.addWidget(acc)
+        # Amber accent line
+        accent = QFrame()
+        accent.setFixedHeight(3)
+        accent.setStyleSheet("background-color: #D9A800; border: none;")
+        root.addWidget(accent)
 
         # ── Scrollable receipt body ─────────────────────────────────────────
         from PyQt5.QtWidgets import QTextEdit
         self._txt = QTextEdit()
         self._txt.setReadOnly(True)
+        self._txt.setFont(QFont("Courier New", 11))
         self._txt.setStyleSheet("""
             QTextEdit {
-                background-color: #FFFDF5;
-                border: none;
-                font-family: 'Courier New', monospace;
-                font-size: 13px;
+                background-color: #FFFDF7;
                 color: #1a1a1a;
-                padding: 12px 18px;
+                border: none;
+                padding: 12px 20px;
             }
         """)
         root.addWidget(self._txt, stretch=1)
@@ -440,10 +440,10 @@ class ReceiptDialog(QDialog):
 
         # ── Footer buttons ──────────────────────────────────────────────────
         foot = QFrame()
-        foot.setFixedHeight(52)
-        foot.setStyleSheet("background-color: #f0ead8; border-top: 1px solid #c8b87a;")
+        foot.setFixedHeight(56)
+        foot.setStyleSheet("background-color: #F5EFDC; border-top: 1px solid #E0D6B0;")
         fl = QHBoxLayout(foot)
-        fl.setContentsMargins(16, 0, 16, 0)
+        fl.setContentsMargins(20, 0, 20, 0)
         fl.setSpacing(10)
 
         print_btn = QPushButton("🖨  Print / Save")
@@ -463,17 +463,16 @@ class ReceiptDialog(QDialog):
         root.addWidget(foot)
 
     def _render_receipt(self):
-        """Build the monospace receipt text and push it into the QTextEdit."""
-        W = 46  # receipt width in chars
+        """Build the monospace receipt text and push it into the QTextEdit.
+        Mirrors script.py's ReceiptDialog._render exactly: same header/footer
+        copy, same column layout, same whole-peso formatting, and the same
+        SUBTOTAL / discount / TOTAL DUE breakdown when a discount applied."""
+        W = self.RECEIPT_WIDTH
 
-        def ln(text="", align="l"):
-            if align == "c":
-                return text.center(W)
-            if align == "r":
-                return text.rjust(W)
-            return text
+        def center(text):
+            return text.center(W)
 
-        def div(ch="─"):
+        def divider(ch="─"):
             return ch * W
 
         def two_col(left, right):
@@ -481,29 +480,40 @@ class ReceiptDialog(QDialog):
             return left + " " * gap + right
 
         lines = []
-
-        # Header
-        lines.append(div("═"))
-        lines.append(ln(STORE_INFO["name"], "c"))
-        lines.append(ln(STORE_INFO["branch"], "c"))
-        lines.append(ln(STORE_INFO["address"], "c"))
-        lines.append(ln(f"Tel: {STORE_INFO['tel']}", "c"))
-        lines.append(ln(f"TIN: {STORE_INFO['tin']}", "c"))
-        lines.append(div("═"))
+        lines.append(divider("═"))
+        lines.append(center(self.STORE_NAME))
+        lines.append(center(self.STORE_TAGLINE))
+        lines.append(divider("═"))
         lines.append("")
 
-        lines.append(two_col("Order  :", f"#{self.order_id}"))
-        lines.append(two_col("Date   :", str(self.order_date)))
+        lines.append(two_col("Order #  :", str(self.order_id)))
+        lines.append(two_col("Date     :", str(self.order_date)))
         lines.append("")
 
-        # Items
-        lines.append(div())
-        lines.append(f"{'ITEM':<22} {'SIZE':>6} {'QTY':>3} {'TOTAL':>11}")
-        lines.append(div())
+        lines.append(divider())
+        lines.append(f"{'ITEM':<24} {'QTY':>4} {'SIZE':>6}  {'TOTAL':>4}")
+        lines.append(divider())
 
+        items = []
+        discount_amount = 0
+        cash_paid = None
+        change_given = None
         try:
             db  = get_db_connection()
             cur = db.cursor(dictionary=True)
+            cur.execute(
+                "SELECT discount_amount, cash_paid, change_given "
+                "FROM orders WHERE id = %s",
+                (self.order_id,),
+            )
+            order_row = cur.fetchone()
+            if order_row:
+                discount_amount = int(round(float(order_row.get("discount_amount") or 0)))
+                if order_row.get("cash_paid") is not None:
+                    cash_paid = int(round(float(order_row["cash_paid"])))
+                if order_row.get("change_given") is not None:
+                    change_given = int(round(float(order_row["change_given"])))
+
             cur.execute(
                 "SELECT product_name, size_name, quantity, item_price "
                 "FROM order_items WHERE order_id = %s",
@@ -512,34 +522,41 @@ class ReceiptDialog(QDialog):
             items = cur.fetchall()
             db.close()
         except Exception as err:
-            items = []
             lines.append(f"  Error loading items: {err}")
 
         for itm in items:
-            name  = (itm["product_name"] or "—")[:21]
-            size  = (itm["size_name"]    or "—")[:6]
+            name  = (itm["product_name"] or "—")[:22]
+            size  = itm["size_name"] or ""
             qty   = itm["quantity"]
-            price = float(itm["item_price"])
-            right = f"₱{price:>8,.2f}"
-            label = f"{name:<22} {size:>6} {qty:>3}"
+            price = f"₱{int(round(float(itm['item_price']))):,}"
+            label = f"{name} ×{qty}"
+            right = f"{size:>6}  {price:>6}"
             gap   = max(1, W - len(label) - len(right))
             lines.append(label + " " * gap + right)
 
-        lines.append(div())
+        lines.append(divider())
+
+        total_int = int(round(float(self.order_total)))
+        if discount_amount:
+            subtotal = total_int + discount_amount
+            lines.append(two_col("SUBTOTAL", f"₱{subtotal:,}"))
+            lines.append(two_col("PWD/Senior Discount (20%)", f"–₱{discount_amount:,}"))
+        lines.append(two_col("TOTAL DUE", f"₱{total_int:,}"))
+        lines.append(divider("═"))
         lines.append("")
 
-        # Total
-        lines.append(div("═"))
-        lines.append(two_col("ORDER TOTAL", f"₱{self.order_total:>9,.2f}"))
-        lines.append(div("═"))
-        lines.append("")
+        if cash_paid is not None or change_given is not None:
+            if cash_paid is not None:
+                lines.append(two_col("Cash Tendered", f"₱{cash_paid:,}"))
+            if change_given is not None:
+                lines.append(two_col("Change", f"₱{change_given:,}"))
+            lines.append("")
 
-        # Footer
-        lines.append(div())
-        lines.append(ln("Thank you for choosing", "c"))
-        lines.append(ln('MIGUELITOS Hyped Mangoes!', "c"))
-        lines.append(div())
-        lines.append(ln("*** Customer Copy ***", "c"))
+        lines.append(divider())
+        lines.append(center("Thank you for visiting Miguelito's!"))
+        lines.append(center('"Stay Hyped. Stay Mango."'))
+        lines.append(divider())
+        lines.append(center("*** Customer Copy ***"))
         lines.append("")
 
         self._txt.setPlainText("\n".join(lines))
@@ -908,10 +925,14 @@ class OrdersDialog(QDialog):
         report_text = self._build_report_text()
         font = QFont("Courier New", 9)
         painter.setFont(font)
-        fm = QFontMetrics(font)
+        # Bind the metrics to the printer device so line_height is measured
+        # in the *printer's* DPI space, matching the coordinates drawText()
+        # uses below. Using screen-bound metrics here was the root cause of
+        # the exported PDF/printed report collapsing to the top of the page.
+        fm = QFontMetrics(font, printer)
         line_height = fm.height() + 2
         page_rect = printer.pageRect()
-        margin = 40
+        margin = max(40, printer.resolution() // 4)
         x = margin
         y = margin
         max_y = page_rect.height() - margin

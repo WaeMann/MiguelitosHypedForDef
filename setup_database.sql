@@ -50,9 +50,12 @@ CREATE TABLE IF NOT EXISTS product_sizes (
 
 -- ── ORDERS ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS orders (
-    id         INT AUTO_INCREMENT PRIMARY KEY,
-    total      DECIMAL(10,2),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    total           DECIMAL(10,2),
+    discount_amount DECIMAL(10,2) DEFAULT 0,
+    cash_paid       DECIMAL(10,2) DEFAULT NULL,
+    change_given    DECIMAL(10,2) DEFAULT NULL,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ── ORDER ITEMS ───────────────────────────────────────────────────────────
