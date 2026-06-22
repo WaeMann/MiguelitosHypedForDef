@@ -16,8 +16,10 @@ def switch_page_factory(stack, pages):
     return switch
 
 
-def build_app(role, username=""):
+def build_app(role, username="", splash=None):
     from PyQt5.QtCore import Qt
+    if splash:
+        splash.set_message("Loading menu and inventory...")
     stack = QStackedWidget()
     stack.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
     pages = {}
@@ -56,6 +58,8 @@ def build_app(role, username=""):
     else:
         stack.setCurrentWidget(pages["pos"])
 
+    if splash:
+        splash.set_message("Almost ready...")
     stack.showFullScreen()
     # Lock window to actual fullscreen size so that showing hidden panels
     # never causes the FramelessWindowHint window to resize beyond the screen.
@@ -65,7 +69,10 @@ def build_app(role, username=""):
 
 
 if __name__ == "__main__":
-    # Verify DB connection before importing the full GUI modules.
+    # Verify DB connection BEFORE importing any Qt modules. mysql-connector-python
+    # and PyQt5 ship their own native networking/SSL DLLs -- if Qt is loaded
+    # first and mysql-connector then touches the network, it can hard-crash
+    # the process (access violation) on some Windows setups. Keep this order.
     try:
         from db import get_db_connection, end_session, audit
         print("main: testing DB connection before importing Qt modules", flush=True)
@@ -79,6 +86,16 @@ if __name__ == "__main__":
     print("main: importing PyQt5.QtWidgets after DB check", flush=True)
     from PyQt5.QtWidgets import QApplication, QStackedWidget, QMessageBox
 
+    print("main: starting QApplication", flush=True)
+    app = QApplication(sys.argv)
+    print("main: QApplication created", flush=True)
+
+    # ── Loading window #1: shown the moment the app's GUI spins up ──────────
+    from splash import LoadingScreen
+    splash = LoadingScreen("Starting up...")
+    splash.show()
+    splash.set_message("Loading application...")
+
     print("main: importing app modules after DB check", flush=True)
     from login import LoginWindow
     from script import IMS
@@ -86,9 +103,7 @@ if __name__ == "__main__":
     from inventory import InventoryPage
     from ingredients import IngredientsPage
 
-    print("main: starting QApplication", flush=True)
-    app = QApplication(sys.argv)
-    print("main: QApplication created", flush=True)
+    splash.finish()
 
     # ── Login → App → Logout loop ────────────────────────────────────────────
     while True:
@@ -108,8 +123,15 @@ if __name__ == "__main__":
             print("main: no login data", flush=True)
             break
 
+        # ── Loading window #2: shown right after a successful log-in ────────
+        username = data.get("username", "")
+        splash = LoadingScreen(f"Welcome, {username}!" if username else "Logging in...")
+        splash.show()
+
         print("main: building main window", flush=True)
-        window = build_app(data["role"], data.get("username", ""))
+        window = build_app(data["role"], username, splash=splash)
+        splash.finish()
+
         print("main: starting event loop", flush=True)
         exit_code = app.exec_()
         print(f"main: event loop exited with code {exit_code}", flush=True)
@@ -119,6 +141,10 @@ if __name__ == "__main__":
 
         if exit_code != LOGOUT_CODE:
             break
+
+        # ── Loading window #3: shown right after logging out ────────────────
+        splash = LoadingScreen("Signing out...")
+        splash.show()
 
         session_id = data.get("session_id")
         if session_id:
@@ -132,5 +158,7 @@ if __name__ == "__main__":
             except Exception as err:
                 print(f"main: failed to close out session on logout: {err}", flush=True)
         # else: loop back to show login again
+
+        splash.finish()
 
     sys.exit(0)
