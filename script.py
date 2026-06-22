@@ -940,15 +940,43 @@ def save_order_to_db(order_rows, total, discount_amount=0,
 # ---------------------------------------------------------------------------
 # Main window
 # ---------------------------------------------------------------------------
+class UserInfoWidget(QWidget):
+    """Shows logged-in username and role badge next to the clock."""
+    def __init__(self, username: str, role: str, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(2)
+
+        name_lbl = QLabel(username)
+        name_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        name_lbl.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        name_lbl.setStyleSheet("color: #2b2b2b; background: transparent;")
+
+        role_color = "#008000" if role == "admin" else "#34699A"
+        role_lbl = QLabel(role.upper())
+        role_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        role_lbl.setFont(QFont("Segoe UI", 8, QFont.Bold))
+        role_lbl.setStyleSheet(
+            f"color: white; background: {role_color}; border-radius: 4px;"
+            " padding: 1px 6px; letter-spacing: 1px;"
+        )
+
+        layout.addWidget(name_lbl)
+        layout.addWidget(role_lbl)
+
+
 class IMS(QWidget):
     def __init__(self, switch_callback=None, report_page=None,
-                 inventory_page=None, ingredients_page=None, role="cashier"):
+                 inventory_page=None, ingredients_page=None, role="cashier",
+                 username=""):
         super().__init__()
         self.switch_callback = switch_callback
         self.report_page = report_page
         self.inventory_page = inventory_page
         self.ingredients_page = ingredients_page
         self.role = role
+        self.username = username
 
         self.section_grids = []
         self.menu_cards = []
@@ -1140,6 +1168,9 @@ class IMS(QWidget):
         top_bar_layout.addStretch()
         clock_widget = ClockWidget()
         top_bar_layout.addWidget(clock_widget)
+        top_bar_layout.addSpacing(6)
+        user_info = UserInfoWidget(self.username, self.role)
+        top_bar_layout.addWidget(user_info)
         top_bar_layout.addSpacing(12)
         top_bar_layout.addWidget(self.admin_btn)
 

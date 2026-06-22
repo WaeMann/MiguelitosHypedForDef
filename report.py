@@ -2185,15 +2185,42 @@ class SecurityDialog(QDialog):
         self._aud_count_lbl.setText(f"{len(display)} record(s)")
 
 
+class UserInfoWidget(QWidget):
+    """Shows logged-in username and role badge next to the clock."""
+    def __init__(self, username: str, role: str, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(2)
+
+        name_lbl = QLabel(username)
+        name_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        name_lbl.setFont(QFont("Segoe UI", 11, QFont.Bold))
+        name_lbl.setStyleSheet("color: #2b2b2b; background: transparent;")
+
+        role_color = "#008000" if role == "admin" else "#34699A"
+        role_lbl = QLabel(role.upper())
+        role_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        role_lbl.setFont(QFont("Segoe UI", 8, QFont.Bold))
+        role_lbl.setStyleSheet(
+            f"color: white; background: {role_color}; border-radius: 4px;"
+            " padding: 1px 6px; letter-spacing: 1px;"
+        )
+
+        layout.addWidget(name_lbl)
+        layout.addWidget(role_lbl)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # REPORT PAGE
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ReportPage(QWidget):
-    def __init__(self, switch_callback=None, role: str = "cashier"):
+    def __init__(self, switch_callback=None, role: str = "cashier", username: str = ""):
         super().__init__()
         self.switch_callback = switch_callback
         self.role        = role
+        self.username    = username
         self.sales_data  = {}
         self.daily_sales = {}
         self._page_period = "all"   # "daily", "weekly", "monthly", "all"
@@ -2312,6 +2339,9 @@ class ReportPage(QWidget):
         tbl.addStretch()
         clock_widget = ClockWidget()
         tbl.addWidget(clock_widget)
+        tbl.addSpacing(6)
+        user_info = UserInfoWidget(self.username, self.role)
+        tbl.addWidget(user_info)
         tbl.addSpacing(12)
         self._logout_btn = QPushButton("🚪 LOG OUT")
         self._logout_btn.setFixedSize(130, 36)
@@ -2527,6 +2557,7 @@ class ReportPage(QWidget):
             "letter-spacing: 3px; background: transparent; padding: 8px 0 4px 0;"
         )
         content_grid.addWidget(trends_sep, 3, 0, 1, 2)
+        self._trends_sep = trends_sep
 
         # Controls row
         it_controls_panel = self._make_panel()
@@ -2578,6 +2609,7 @@ class ReportPage(QWidget):
         it_controls_layout.addWidget(self.ma_combo)
 
         content_grid.addWidget(it_controls_panel, 4, 0, 1, 2)
+        self._it_controls_panel = it_controls_panel
 
         # Line chart panel
         line_panel = self._make_panel()
@@ -2596,6 +2628,7 @@ class ReportPage(QWidget):
         line_layout.addWidget(self.line_canvas)
 
         content_grid.addWidget(line_panel, 5, 0)
+        self._line_panel = line_panel
 
         # Monthly bar chart panel
         monthly_panel = self._make_panel()
@@ -2614,6 +2647,21 @@ class ReportPage(QWidget):
         monthly_layout.addWidget(self.monthly_canvas)
 
         content_grid.addWidget(monthly_panel, 5, 1)
+        self._monthly_panel = monthly_panel
+
+        content_grid.setColumnStretch(0, 1)
+        content_grid.setColumnStretch(1, 1)
+
+        # ── Apply role-based restrictions ─────────────────────────────────────
+        if self.role != "admin":
+            self._trends_sep.hide()
+            self._it_controls_panel.hide()
+            self._line_panel.hide()
+            self._monthly_panel.hide()
+            # Also wire combo signals only if visible (avoid wasted work)
+        else:
+            self.range_combo.currentIndexChanged.connect(self._load_and_plot)
+            self.ma_combo.currentIndexChanged.connect(self._load_and_plot)
 
     # ── ADMIN BAR ────────────────────────────────────────────────────────────
 

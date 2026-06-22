@@ -16,22 +16,23 @@ def switch_page_factory(stack, pages):
     return switch
 
 
-def build_app(role):
+def build_app(role, username=""):
     from PyQt5.QtCore import Qt
     stack = QStackedWidget()
     stack.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
     pages = {}
     switch = switch_page_factory(stack, pages)
 
-    pages["report"]      = ReportPage(switch_callback=switch, role=role)
-    pages["inventory"]   = InventoryPage(switch_callback=switch)
-    pages["ingredients"] = IngredientsPage(switch_callback=switch)
+    pages["report"]      = ReportPage(switch_callback=switch, role=role, username=username)
+    pages["inventory"]   = InventoryPage(switch_callback=switch, role=role, username=username)
+    pages["ingredients"] = IngredientsPage(switch_callback=switch, role=role, username=username)
     pages["pos"]         = IMS(
         switch_callback=switch,
         report_page=pages["report"],
         inventory_page=pages["inventory"],
         ingredients_page=pages["ingredients"],
         role=role,
+        username=username,
     )
 
     # When inventory changes → refresh POS menu cards and ingredients combos.
@@ -108,7 +109,7 @@ if __name__ == "__main__":
             break
 
         print("main: building main window", flush=True)
-        window = build_app(data["role"])
+        window = build_app(data["role"], data.get("username", ""))
         print("main: starting event loop", flush=True)
         exit_code = app.exec_()
         print(f"main: event loop exited with code {exit_code}", flush=True)
