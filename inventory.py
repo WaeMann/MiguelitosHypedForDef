@@ -1098,6 +1098,11 @@ class InventoryPage(QWidget):
                 self.ef_qty.styleSheet() +
                 "QLineEdit { background: #f0ede0; color: #888; }"
             )
+            self.ef_category.setReadOnly(True)
+            self.ef_category.setStyleSheet(
+                self.ef_category.styleSheet() +
+                "QLineEdit { background: #f0ede0; color: #888; }"
+            )
 
     # ── event filter ──────────────────────────────────────────────────────────
 
