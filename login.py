@@ -2,6 +2,7 @@
 
 import sys
 import os
+import re
 import secrets
 import time
 
@@ -114,6 +115,22 @@ class ResetPasswordDialog(QDialog):
             return
         if p1 != p2:
             QMessageBox.critical(self, "Error", "Passwords do not match.")
+            return
+        # ── Password complexity check ─────────────────────────────────────
+        errors = []
+        if not re.search(r'[A-Z]', p1):
+            errors.append("• At least one uppercase letter (A–Z)")
+        if not re.search(r'[a-z]', p1):
+            errors.append("• At least one lowercase letter (a–z)")
+        if not re.search(r'[0-9]', p1):
+            errors.append("• At least one number (0–9)")
+        if not re.search(r'[^A-Za-z0-9]', p1):
+            errors.append("• At least one special character (!@#$%…)")
+        if errors:
+            QMessageBox.critical(
+                self, "Weak Password",
+                "Password must contain:\n" + "\n".join(errors)
+            )
             return
         try:
             salt  = gen_salt()
@@ -271,11 +288,13 @@ class LoginWindow(QDialog):
         layout.addWidget(self.status_lbl)
 
         # Only "Forgot Password?" — Create Cashier Account removed for security
+        # Shown only when exactly 1 login attempt remains
         links_row = QHBoxLayout()
-        forgot_btn = self._link_btn("Forgot Password?")
-        forgot_btn.clicked.connect(self.handle_forgot_password)
+        self.forgot_btn = self._link_btn("Forgot Password?")
+        self.forgot_btn.clicked.connect(self.handle_forgot_password)
+        self.forgot_btn.setVisible(False)
         links_row.addStretch()
-        links_row.addWidget(forgot_btn)
+        links_row.addWidget(self.forgot_btn)
         links_row.addStretch()
         layout.addLayout(links_row)
 
@@ -347,6 +366,15 @@ class LoginWindow(QDialog):
                 self.status_lbl.setText("Invalid username or password.")
                 return
 
+            # ── Case-sensitive username enforcement ───────────────────────
+            # MySQL collation may be case-insensitive; enforce exact match here
+            if user["username"] != username:
+                hash_password_pbkdf2(password, gen_salt())
+                log_login(db, username, False, "Username case mismatch")
+                db.commit(); db.close()
+                self.status_lbl.setText("Invalid username or password.")
+                return
+
             uid      = user["id"]
             now_ts   = int(time.time())
 
@@ -409,10 +437,13 @@ class LoginWindow(QDialog):
                         f"Invalid username or password. "
                         f"{left} attempt{'s' if left != 1 else ''} remaining."
                     )
+                    # Show "Forgot Password?" only when 1 attempt remains
+                    self.forgot_btn.setVisible(left == 1)
                 self.password_edit.clear()
                 return
 
             # ── Success ───────────────────────────────────────────────────
+            self.forgot_btn.setVisible(False)
             import datetime as _dt
             session_id = secrets.token_hex(16)
             now_str    = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -457,10 +488,13 @@ class LoginWindow(QDialog):
             db  = get_db_connection()
             cur = db.cursor(dictionary=True)
             cur.execute(
-                "SELECT role FROM users WHERE username = %s", (username,)
+                "SELECT username, role FROM users WHERE username = %s", (username,)
             )
             user = cur.fetchone()
             db.close()
+            # Enforce case-sensitive username match
+            if user and user["username"] != username:
+                user = None
             if user and user["role"] == "cashier":
                 dlg = ResetPasswordDialog(username, parent=self)
                 dlg.exec_()

@@ -1090,6 +1090,25 @@ class IMS(QWidget):
         controls_row.addWidget(self.add_item_btn, alignment=Qt.AlignBottom)
         yellow_layout.addLayout(controls_row)
 
+        # ── CLEAR ORDERS button ──────────────────────────────────────────────
+        self.clear_orders_btn = QPushButton("🗑  CLEAR ORDERS")
+        self.clear_orders_btn.setFixedHeight(36)
+        self.clear_orders_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.clear_orders_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #7D3C98;
+                color: white;
+                font-size: 13px;
+                font-weight: bold;
+                border-radius: 10px;
+                padding: 4px 10px;
+            }
+            QPushButton:hover  { background-color: #6C3483; }
+            QPushButton:pressed { background-color: #5B2C6F; }
+        """)
+        self.clear_orders_btn.clicked.connect(self.clear_orders)
+        yellow_layout.addWidget(self.clear_orders_btn)
+
         self.order_scroll = DragScrollArea()
         self.order_scroll.setWidgetResizable(True)
         self.order_scroll.setStyleSheet("""
@@ -1655,6 +1674,36 @@ class IMS(QWidget):
         self.total_label.setText(f"Total: ₱{self.order_total}")
         self.order_layout.removeWidget(row)
         row.deleteLater()
+        self.selected_order_row = None
+        self.change_text.setText("ITEMS TO BE CHANGED:")
+        self.bottom_box.hide()
+
+    def clear_orders(self):
+        """Remove all items from the order list after user confirmation."""
+        # Count current order rows
+        count = 0
+        for i in range(self.order_layout.count()):
+            if self.order_layout.itemAt(i).widget():
+                count += 1
+        if count == 0:
+            QMessageBox.information(self, "Clear Orders", "The order is already empty.")
+            return
+        reply = QMessageBox.question(
+            self, "Clear Orders",
+            f"Remove all {count} item(s) from the order?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        # Remove every row widget from the order layout
+        while self.order_layout.count():
+            item = self.order_layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+        self.order_total = 0
+        self.total_label.setText("Total: ₱0")
         self.selected_order_row = None
         self.change_text.setText("ITEMS TO BE CHANGED:")
         self.bottom_box.hide()

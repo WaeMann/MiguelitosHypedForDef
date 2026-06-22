@@ -1,6 +1,7 @@
 # This is the report.py (Do not remove line)
 
 import sys
+import re
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QPushButton, QFrame, QGridLayout, QGraphicsDropShadowEffect,
@@ -1225,6 +1226,22 @@ class AddUserDialog(QDialog):
             self._status_lbl.setText("⚠  Password is required.")
             return
 
+        # ── Password complexity check ─────────────────────────────────────
+        pw_errors = []
+        if not re.search(r'[A-Z]', pwd):
+            pw_errors.append("uppercase letter (A–Z)")
+        if not re.search(r'[a-z]', pwd):
+            pw_errors.append("lowercase letter (a–z)")
+        if not re.search(r'[0-9]', pwd):
+            pw_errors.append("number (0–9)")
+        if not re.search(r'[^A-Za-z0-9]', pwd):
+            pw_errors.append("special character (!@#$%…)")
+        if pw_errors:
+            self._status_lbl.setText(
+                "⚠  Password must contain: " + ", ".join(pw_errors) + "."
+            )
+            return
+
         try:
             db  = get_db_connection()
             cur = db.cursor(buffered=True)
@@ -1349,6 +1366,22 @@ class ResetPasswordDialog(QDialog):
             return
         if p1 != p2:
             self._status_lbl.setText("⚠  Passwords do not match.")
+            return
+
+        # ── Password complexity check ─────────────────────────────────────
+        pw_errors = []
+        if not re.search(r'[A-Z]', p1):
+            pw_errors.append("uppercase letter (A–Z)")
+        if not re.search(r'[a-z]', p1):
+            pw_errors.append("lowercase letter (a–z)")
+        if not re.search(r'[0-9]', p1):
+            pw_errors.append("number (0–9)")
+        if not re.search(r'[^A-Za-z0-9]', p1):
+            pw_errors.append("special character (!@#$%…)")
+        if pw_errors:
+            self._status_lbl.setText(
+                "⚠  Password must contain: " + ", ".join(pw_errors) + "."
+            )
             return
         try:
             salt  = gen_salt()
