@@ -2696,7 +2696,6 @@ class ReportPage(QWidget):
             btn.clicked.connect(slot)
             bl.addWidget(btn)
 
-        # Push everything after this to the right
         bl.addStretch()
 
         # Admin-only: Manage Users + Security (right side)
