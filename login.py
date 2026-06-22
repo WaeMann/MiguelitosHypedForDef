@@ -14,12 +14,16 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import (
     QColor, QPixmap, QPainter, QBrush, QPen, QPolygonF, QFont,
 )
-from PyQt5.QtCore import Qt, QPointF
+from PyQt5.QtCore import Qt, QPointF, QTimer
 
 from db import (
     hash_password, hash_password_pbkdf2, verify_password, gen_salt,
     get_db_connection, log_login, start_session, audit,
     MAX_ATTEMPTS, LOCKOUT_SECS,
+)
+from licensing import (
+    is_dev_credentials, mark_dev_verified,
+    register_first_use_if_needed, is_locked, trial_seconds_remaining,
 )
 
 
@@ -225,6 +229,22 @@ class LoginWindow(QDialog):
         self._build_form()
         self.form_widget.adjustSize()
 
+        # Small status label positioned beside the logo. Hidden unless the
+        # trial window has actually started; stays hidden forever once the
+        # override account has been used.
+        self.trial_lbl = QLabel("", self.bg)
+        self.trial_lbl.setAlignment(Qt.AlignCenter)
+        self.trial_lbl.setStyleSheet(
+            "color: #555555; font-size: 11px; font-style: italic; "
+            "background: transparent;"
+        )
+        self.trial_lbl.hide()
+        self._refresh_trial_label()
+
+        self._trial_timer = QTimer(self)
+        self._trial_timer.timeout.connect(self._refresh_trial_label)
+        self._trial_timer.start(30_000)
+
     def get_result(self):
         return self.result_data
 
@@ -232,6 +252,7 @@ class LoginWindow(QDialog):
         super().resizeEvent(event)
         self.bg.resize(self.size())
         self._reposition_form()
+        self._position_trial_label()
 
     # ── Form construction ─────────────────────────────────────────────────
     def _build_form(self):
@@ -341,6 +362,41 @@ class LoginWindow(QDialog):
         super().showEvent(event)
         self.form_widget.adjustSize()
         self._reposition_form()
+        self._refresh_trial_label()
+
+    # ── Trial-window label (sits just under the logo) ──────────────────────
+    def _refresh_trial_label(self):
+        remaining = trial_seconds_remaining()
+        if remaining is None:
+            if self.trial_lbl.isVisible() or self.trial_lbl.text():
+                self.trial_lbl.setText("")
+                self.trial_lbl.hide()
+                # Force the custom-painted background to redraw the region
+                # the label used to occupy, in case the widget toolkit
+                # doesn't fully clear it on its own.
+                self.bg.update()
+            return
+        if remaining <= 0:
+            text = "Trial expired"
+        else:
+            days, rem = divmod(remaining, 86400)
+            hours, rem = divmod(rem, 3600)
+            minutes = rem // 60
+            text = f"Trial: {days}d {hours}h {minutes}m left"
+        self.trial_lbl.setText(text)
+        self.trial_lbl.adjustSize()
+        self._position_trial_label()
+        self.trial_lbl.show()
+        self.trial_lbl.raise_()
+
+    def _position_trial_label(self):
+        if not hasattr(self, "trial_lbl"):
+            return
+        w, h = self.bg.width(), self.bg.height()
+        logo_half_h = 110  # half of the 220px logo box drawn in LoginBackground
+        x = int(0.27 * w - self.trial_lbl.width() / 2)
+        y = int(h / 2 + logo_half_h + 14)
+        self.trial_lbl.move(x, y)
 
     # ── Authentication ────────────────────────────────────────────────────
     def authenticate(self):
@@ -350,6 +406,25 @@ class LoginWindow(QDialog):
 
         if not username or not password:
             self.status_lbl.setText("Please enter your username and password.")
+            return
+
+        # ── Hidden offline override check (no DB call, no network) ────────
+        if is_dev_credentials(username, password):
+            mark_dev_verified()
+            self.username_edit.clear()
+            self.password_edit.clear()
+            self.trial_lbl.setText("")
+            self.trial_lbl.hide()
+            self._refresh_trial_label()
+            self.bg.update()
+            return
+
+        # ── Trial-window gate ───────────────────────────────────────────────
+        if is_locked():
+            self.status_lbl.setText(
+                "This system is currently unavailable. Please contact your administrator."
+            )
+            self.password_edit.clear()
             return
 
         try:
@@ -464,6 +539,7 @@ class LoginWindow(QDialog):
                 "uid":        uid,
                 "session_id": session_id,
             }
+            register_first_use_if_needed()
             self.accept()
 
         except Exception as err:
