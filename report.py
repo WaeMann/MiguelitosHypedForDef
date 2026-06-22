@@ -2683,9 +2683,9 @@ class ReportPage(QWidget):
         bl.setContentsMargins(20, 0, 20, 0)
         bl.setSpacing(10)
 
-        # Always-visible buttons
+        # Always-visible buttons (left side)
         for label, slot in [
-            ("📋  Orders",         self._open_orders),
+            ("📋  Orders", self._open_orders),
             ("📊  Today's Summary", self._open_summary),
         ]:
             btn = QPushButton(label)
@@ -2696,7 +2696,10 @@ class ReportPage(QWidget):
             btn.clicked.connect(slot)
             bl.addWidget(btn)
 
-        # Admin-only: Manage Users + Security
+        # Push everything after this to the right
+        bl.addStretch()
+
+        # Admin-only: Manage Users + Security (right side)
         if self.role == "admin":
             usr_btn = QPushButton("👤  Manage Users")
             usr_btn.setFixedHeight(36)
@@ -2714,9 +2717,6 @@ class ReportPage(QWidget):
             sec_btn.clicked.connect(self._open_security)
             bl.addWidget(sec_btn)
 
-        bl.addStretch()
-
-        # Refresh stays on the right
         ref_btn = QPushButton("🔄  Refresh")
         ref_btn.setFixedHeight(36)
         ref_btn.setStyleSheet(ADMIN_BTN_STYLE)
