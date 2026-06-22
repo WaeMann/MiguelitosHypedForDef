@@ -6,34 +6,147 @@ if you'd like to change or improve the codes feel free to do as you like.
 -If you encounter errors, bugs, or glitches, do not ask-SEARCH THE INTERNET OR USE AI.
 Just kiddin', tell everyone what you think. We'll do what we can to fix it.
 
+----------------------------------------------------------------------------------
+REQUIREMENTS AND FEATURES
+----------------------------------------------------------------------------------
+Devices:
+-Supported
+PC/Desktop
+Laptop
+Convertible tablets/Tablet PCs
+-Unsupported
+Tablets (Android/Ipad)
+Smartphones (Android/Iphones)
+Consoles
+-----------------------------------------
+Programming Language:
+Python
+-----------------------------------------
+Programming Language Version:
+-For compatibility,
+Python 3.13+
+Python 3.14 preferred
+-----------------------------------------
+Operating System:
+-Supported
+Windows 10 (recommended)
+Windows 11 (recommended)
+-Possible but untested
+Linux (with PyQt5 and MySQL configured)
+macOS (with PyQt5 and MySQL configured)
+-----------------------------------------
+FrontEnd (GUI):
+-Framework
+PyQt5
+-UI Type
+Desktop GUI Application
+Fullscreen POS System
+Frameless Window Interface
+-----------------------------------------
+BackEnd:
+Business Logic
+Inventory Management
+Ingredients Management
+Reporting System
+User Authentication
+Session Management
+-----------------------------------------
+Database:
+-DBMS
+MySQL
+-Database Server
+MySQL Server 8.0+
+-Connector
+mysql-connector-python
+-Database Name
+database="pos_system"
+-Default Configuration
+host="localhost"
+port="3306"
+-----------------------------------------
+Python Packages Required:
+-Core Packages
+pip install PyQt5
+pip install mysql-connector-python
+pip install matplotlib
+-Standard Library Packages (No installation needed)
+sys
+os
+hashlib
+secrets
+datetime
+time
+copy
+-----------------------------------------
+Security Algorithms:
+-Password Hashing
+PBKDF2-HMAC-SHA256
+-Settings:
+200,000 iterations
+32-byte salt
+-Legacy Support
+SHA-256 (Used for account migration from older passwords.)
+-Other Security Features
+Case sensitive username and password
+Upper/Lower case, number, special password requirement
+Cryptographic random salts
+Constant-time password verification
+Login attempt limiting
+Account lockout system
+Session tracking
+Audit logging
+-----------------------------------------
+Features:
+User Login System
+Password Reset
+Role-Based Access Control (Admin/Cashier)
+Inventory Management
+Ingredient Tracking
+POS (Point of Sale)
+Sales Reporting
+Audit Logs
+Session Tracking
+Password Security
+Senior/PWD Discount Handling
+Fullscreen Kiosk Mode
+----------------------------------------------------------------------------------
+
 INSTRUCTIONS
 
 Share or download from github repository: https://github.com/WaeMann/MiguelitosHypedForDef.git
 
-1. Create/add local python interpreter on your IDE.
-settings > python > interpreter > add/create local interpreter
+1. In your IDE, Open the file then create/add local python interpreter.
+settings > python > interpreter > add/create local interpreter > Install Python 3.14
 
-2. Install the graphic modules/GUI toolkits/Database connector on your terminals
+2. Install the dependencies: graphic modules/GUI toolkits/Database connector on your terminal
 if you haven't installed yet
 
 Enter this on your terminal:
 pip install pyqt5
 pip install matplotlib
-pip install mysql-connector-python (change the connector if you're not using MySQL)
+pip install mysql-connector-python
 
-3. For database, execute setup_database(.)sql then seed_products(.)sql
+3. Install MySQL server (Recommended).
+
+4. For database, execute setup_database(.)sql then seed_products(.)sql
 Also, change the db.py connector depending on the server where you've set up the executed file/database.
 This shyt
-        host="127.0.0.1",
-        port="3307",
-        user="root",
+        host="localhost",  >
+        port="3306",       >  Default
+        user="root",       >
         password="6789", < Leave blank if no password
         database="pos_system", < Do not change
 
-4. Run the file in main.py (launcher) only. Running the other files is not recommended.
+5. Run the file main.py (launcher) only. Running the other files is not recommended.
 Does not work when switching windows blah blah blah Because main.py connects the files together blah blah blah
 
-5. Use 'TestChisa.jpg' (Remove "C:/Users/Administrator/PycharmProjects/MiguelitosHypedForDef/") in folder for showcasing image function/database.
+6. Available user accounts:
+Username - Password
+admin - Admin@123
+Yngel - Cutie@123
+cashier - Cashier@123
+
+6. Use 'TestChisa.jpg' (Remove "C:/Users/Administrator/PycharmProjects/MiguelitosHypedForDef/") in folder for showcasing image function/database.
 
 DevNuts
 
