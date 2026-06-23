@@ -628,7 +628,8 @@ class OrdersDialog(QDialog):
             }}
             QPushButton:hover {{ background-color: #D9BE70; color: #222; }}
         """
-        for key, label in [("all","All"), ("daily","Today"), ("weekly","This Week"), ("monthly","This Month"), ("custom","Custom…")]:
+        for key, label in [("all", "All"), ("daily", "Today"), ("weekly", "This Week"), ("monthly", "This Month"),
+                           ("custom", "Custom…")]:
             is_active = key == "all"
             btn = QPushButton(label)
             btn.setFixedHeight(30)
@@ -656,6 +657,13 @@ class OrdersDialog(QDialog):
         print_btn.setFixedHeight(30)
         print_btn.clicked.connect(self._print_report)
         period_row.addWidget(print_btn)
+
+        # ── CSV Export Button (Idinagdag gaya ng plano) ──
+        csv_btn = QPushButton("💾 Export CSV")
+        csv_btn.setStyleSheet(BLUE_BTN_STYLE)
+        csv_btn.setFixedHeight(30)
+        csv_btn.clicked.connect(self._export_csv)
+        period_row.addWidget(csv_btn)
 
         bl.addLayout(period_row)
 
@@ -766,7 +774,7 @@ class OrdersDialog(QDialog):
             self._load()
 
     def _get_date_range(self):
-        """Return (start_str, end_str) for the active period, or None for all."""
+        from datetime import date, timedelta
         today = date.today()
         if self._active_period == "daily":
             return today.isoformat(), today.isoformat()
@@ -780,7 +788,7 @@ class OrdersDialog(QDialog):
             f = self._from_date.date().toPyDate()
             t = self._to_date.date().toPyDate()
             return f.isoformat(), t.isoformat()
-        return None, None  # all
+        return None, None
 
     def _load(self):
         self._table.setRowCount(0)
@@ -789,7 +797,8 @@ class OrdersDialog(QDialog):
         start_str, end_str = self._get_date_range()
 
         try:
-            db  = get_db_connection()
+            from db import get_db_connection
+            db = get_db_connection()
             cur = db.cursor(dictionary=True)
             if start_str:
                 cur.execute("""
@@ -844,20 +853,19 @@ class OrdersDialog(QDialog):
 
     def _view_detail(self, index):
         r = index.row()
-        order_id   = int(self._table.item(r, 0).text())
+        order_id = int(self._table.item(r, 0).text())
         order_date = self._table.item(r, 1).text()
-        total_str  = self._table.item(r, 3).text().replace("₱", "").replace(",", "")
+        total_str = self._table.item(r, 3).text().replace("₱", "").replace(",", "")
         try:
             total = float(total_str)
         except ValueError:
             total = 0.0
+        # Make sure ReceiptDialog is imported/defined sa itaas ng report.py
         dlg = ReceiptDialog(order_id, total, order_date, parent=self)
         dlg.exec_()
 
-    # ── Export helpers ────────────────────────────────────────────────────────
-
     def _build_report_text(self) -> str:
-        """Build a plain-text report string for printing/PDF."""
+        from datetime import datetime
         rows = self._current_rows
         period_label = {
             "all": "All Time", "daily": "Today", "weekly": "This Week",
@@ -869,8 +877,7 @@ class OrdersDialog(QDialog):
         grand_total = sum(float(r["total"]) for r in rows)
         lines = []
         lines.append("═" * 60)
-        lines.append(f"  {STORE_INFO['name']}  —  {STORE_INFO['branch']}")
-        lines.append(f"  {STORE_INFO['address']}")
+        lines.append(f"  MIGUELITO'S HYPED MANGOES")
         lines.append("═" * 60)
         lines.append(f"  ORDER HISTORY REPORT  ({period_label})")
         lines.append(f"  Period: {date_range_info}")
@@ -879,10 +886,10 @@ class OrdersDialog(QDialog):
         lines.append(f"  {'Order ID':<12} {'Date / Time':<25} {'Items':>5} {'Total':>12}")
         lines.append("─" * 60)
         for row in rows:
-            oid  = str(row["id"])
-            dt   = str(row["created_at"])[:19]
-            cnt  = str(row["item_count"] or 0)
-            tot  = f"₱{float(row['total']):>10,.2f}"
+            oid = str(row["id"])
+            dt = str(row["created_at"])[:19]
+            cnt = str(row["item_count"] or 0)
+            tot = f"₱{float(row['total']):>10,.2f}"
             lines.append(f"  {oid:<12} {dt:<25} {cnt:>5} {tot:>12}")
         lines.append("─" * 60)
         lines.append(f"  {'TOTAL ORDERS:':<38} {len(rows):>5}")
@@ -891,7 +898,10 @@ class OrdersDialog(QDialog):
         return "\n".join(lines)
 
     def _export_pdf(self):
-        """Save a PDF copy of the current order report."""
+        from datetime import date
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+        from PyQt5.QtPrintSupport import QPrinter
+
         path, _ = QFileDialog.getSaveFileName(
             self, "Save Report as PDF", f"orders_report_{date.today().isoformat()}.pdf",
             "PDF Files (*.pdf)"
@@ -909,14 +919,14 @@ class OrdersDialog(QDialog):
         QMessageBox.information(self, "PDF Saved", f"Report saved to:\n{path}")
 
     def _print_report(self):
-        """Send the current order report to the system printer."""
+        from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
         printer = QPrinter(QPrinter.HighResolution)
         dlg = QPrintDialog(printer, self)
         if dlg.exec_() != QPrintDialog.Accepted:
             return
         self._do_print(printer)
 
-    def _do_print(self, printer: QPrinter):
+    def _do_print(self, printer):
         from PyQt5.QtGui import QPainter, QFont, QFontMetrics
         painter = QPainter()
         if not painter.begin(printer):
@@ -926,10 +936,6 @@ class OrdersDialog(QDialog):
         report_text = self._build_report_text()
         font = QFont("Courier New", 9)
         painter.setFont(font)
-        # Bind the metrics to the printer device so line_height is measured
-        # in the *printer's* DPI space, matching the coordinates drawText()
-        # uses below. Using screen-bound metrics here was the root cause of
-        # the exported PDF/printed report collapsing to the top of the page.
         fm = QFontMetrics(font, printer)
         line_height = fm.height() + 2
         page_rect = printer.pageRect()
@@ -946,6 +952,76 @@ class OrdersDialog(QDialog):
             y += line_height
 
         painter.end()
+
+    def _export_csv(self):
+        """Simpleng CSV Export gaya ng unang plano."""
+        import csv
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+        from datetime import date
+
+        default_name = f"order_history_{date.today().isoformat()}.csv"
+
+        # Original na QFileDialog behavior
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Order History to CSV",
+            default_name,
+            "CSV Files (*.csv)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            from db import get_db_connection
+            db = get_db_connection()
+            cur = db.cursor(dictionary=True)
+
+            start_str, end_str = self._get_date_range()
+
+            # Ginamit natin ang 'created_at' at 'total' para magtugma sa database mo
+            if start_str:
+                cur.execute("""
+                    SELECT 
+                        id AS Order_ID,
+                        created_at AS Date_Time,
+                        total AS Total_Amount,
+                        discount_amount AS Discount,
+                        cash_paid AS Cash_Paid,
+                        change_given AS Change_Given
+                    FROM orders
+                    WHERE DATE(created_at) BETWEEN %s AND %s
+                    ORDER BY created_at DESC
+                """, (start_str, end_str))
+            else:
+                cur.execute("""
+                    SELECT 
+                        id AS Order_ID,
+                        created_at AS Date_Time,
+                        total AS Total_Amount,
+                        discount_amount AS Discount,
+                        cash_paid AS Cash_Paid,
+                        change_given AS Change_Given
+                    FROM orders
+                    ORDER BY created_at DESC
+                """)
+
+            rows = cur.fetchall()
+            db.close()
+
+            if not rows:
+                QMessageBox.information(self, "No Data", "There are no orders to export for this period.")
+                return
+
+            with open(file_path, mode='w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=rows[0].keys())
+                writer.writeheader()
+                writer.writerows(rows)
+
+            QMessageBox.information(self, "Success", f"Order history exported successfully to:\n{file_path}")
+
+        except Exception as err:
+            QMessageBox.critical(self, "Export Error", f"Failed to export orders:\n{err}")
 
 
 
