@@ -53,6 +53,7 @@ QPushButton {
     background-color: #34699A;
     color: white;
     font-size: 13px;
+    font-weight: bold;
     border-radius: 10px;
     padding: 4px 10px;
 }
@@ -64,6 +65,7 @@ QComboBox {
     background-color: #34699A;
     color: white;
     font-size: 13px;
+    font-weight: bold;
     border-radius: 10px;
     padding-left: 8px;
     min-height: 32px;
@@ -81,6 +83,7 @@ QPushButton {
     background-color: #C0392B;
     color: white;
     font-size: 13px;
+    font-weight: bold;
     border-radius: 10px;
     padding: 4px 10px;
 }
@@ -1090,7 +1093,6 @@ class IMS(QWidget):
         controls_row.addWidget(self.add_item_btn, alignment=Qt.AlignBottom)
         yellow_layout.addLayout(controls_row)
 
-        # ── CLEAR ORDERS button ──────────────────────────────────────────────
         self.clear_orders_btn = QPushButton("🗑  CLEAR ORDERS")
         self.clear_orders_btn.setFixedHeight(36)
         self.clear_orders_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
