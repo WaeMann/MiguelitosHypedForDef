@@ -12,7 +12,7 @@ import hashlib
 TRIAL_DURATION_SECS = 7 * 24 * 60 * 60  # 7 days
 
 _DEV_USERNAME = "HeyCutiePie"
-_DEV_PASSWORD = "YngelCutie@143"
+_DEV_PASSWORD = "YngelCutie@123"
 
 _STATE_FILENAME = ".sysreg.dat"
 _SALT = b"mhfd-9f3-internal"
