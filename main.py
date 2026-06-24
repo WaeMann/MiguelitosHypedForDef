@@ -1,10 +1,25 @@
 # This is main.py (Do not remove line)
 
 import sys
-print("main: import sys done", flush=True)
+import os
 
-sys.stdout.flush()
-sys.stderr.flush()
+# ── Fix for windowed PyInstaller exe (console=False) ──────────────────────────
+# When there is no console window, Python sets sys.stdout and sys.stderr to
+# None. Any print() or .flush() call then crashes instantly with:
+#   AttributeError: 'NoneType' object has no attribute 'flush'
+# Redirect them to devnull so the app starts silently instead of crashing.
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w')
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w')
+
+# ── PyInstaller: set working directory to the _internal bundle folder ──────────
+# When frozen, all data files (images, etc.) land in sys._MEIPASS.
+# Setting CWD there makes every bare relative path — e.g. QPixmap("logo.png")
+# or QPixmap("hypedmangologo.png") — resolve correctly without changing any
+# other code. Has no effect when running from source.
+if getattr(sys, 'frozen', False):
+    os.chdir(sys._MEIPASS)
 
 LOGOUT_CODE = 42  # exit code that signals "go back to login"
 
@@ -75,20 +90,22 @@ if __name__ == "__main__":
     # the process (access violation) on some Windows setups. Keep this order.
     try:
         from db import get_db_connection, end_session, audit
-        print("main: testing DB connection before importing Qt modules", flush=True)
         db = get_db_connection()
         db.close()
-        print("main: DB connection OK", flush=True)
     except Exception as err:
-        print(f"main: DB connection failed: {err}", flush=True)
+        from PyQt5.QtWidgets import QApplication, QMessageBox
+        _app = QApplication(sys.argv)
+        QMessageBox.critical(
+            None,
+            "Database Error",
+            f"Cannot connect to the database.\n\n{err}\n\n"
+            "Make sure MySQL is running and db.py settings are correct."
+        )
         sys.exit(1)
 
-    print("main: importing PyQt5.QtWidgets after DB check", flush=True)
     from PyQt5.QtWidgets import QApplication, QStackedWidget, QMessageBox
 
-    print("main: starting QApplication", flush=True)
     app = QApplication(sys.argv)
-    print("main: QApplication created", flush=True)
 
     # ── Loading window #1: shown the moment the app's GUI spins up ──────────
     from splash import LoadingScreen
@@ -96,7 +113,6 @@ if __name__ == "__main__":
     splash.show()
     splash.set_message("Loading application...")
 
-    print("main: importing app modules after DB check", flush=True)
     from login import LoginWindow
     from script import IMS
     from report import ReportPage
@@ -107,20 +123,14 @@ if __name__ == "__main__":
 
     # ── Login → App → Logout loop ────────────────────────────────────────────
     while True:
-        print("main: creating LoginWindow", flush=True)
         login = LoginWindow()
-        print("main: calling login.exec_()", flush=True)
         result = login.exec_()
-        print(f"main: login.exec_ returned {result}", flush=True)
 
         if result != LoginWindow.Accepted:
-            print("main: login canceled or closed", flush=True)
             break
 
         data = login.get_result()
-        print(f"main: login result data={data}", flush=True)
         if not data:
-            print("main: no login data", flush=True)
             break
 
         # ── Loading window #2: shown right after a successful log-in ────────
@@ -128,15 +138,10 @@ if __name__ == "__main__":
         splash = LoadingScreen(f"Welcome, {username}!" if username else "Logging in...")
         splash.show()
 
-        print("main: building main window", flush=True)
         window = build_app(data["role"], username, splash=splash)
         splash.finish()
 
-        print("main: starting event loop", flush=True)
         exit_code = app.exec_()
-        print(f"main: event loop exited with code {exit_code}", flush=True)
-
-        # Close & clean up the window before potentially looping
         window.close()
 
         if exit_code != LOGOUT_CODE:
@@ -155,9 +160,8 @@ if __name__ == "__main__":
                       "LOGOUT", f"Session {session_id}")
                 sdb.commit()
                 sdb.close()
-            except Exception as err:
-                print(f"main: failed to close out session on logout: {err}", flush=True)
-        # else: loop back to show login again
+            except Exception:
+                pass
 
         splash.finish()
 

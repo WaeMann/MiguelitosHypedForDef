@@ -183,18 +183,18 @@ class LoginBackground(QWidget):
         painter.fillRect(0, 0, w, h, self.CREAM)
 
         poly = QPolygonF([
-            QPointF(0.75 * w, 0), QPointF(w, 0),
-            QPointF(w, h),        QPointF(0.55 * w, h),
+            QPointF(0.72 * w, 0), QPointF(w, 0),
+            QPointF(w, h),        QPointF(0.52 * w, h),
         ])
         painter.setBrush(QBrush(self.YELLOW))
         painter.setPen(Qt.NoPen)
         painter.drawPolygon(poly)
 
         painter.setPen(QPen(self.GREEN, 6))
-        painter.drawLine(QPointF(0.75 * w, 0), QPointF(0.55 * w, h))
+        painter.drawLine(QPointF(0.72 * w, 0), QPointF(0.52 * w, h))
 
         if self._logo_pixmap and not self._logo_pixmap.isNull():
-            logo_w, logo_h = 220, 220
+            logo_w, logo_h = 370, 370
             scaled = self._logo_pixmap.scaled(
                 logo_w, logo_h, Qt.KeepAspectRatio, Qt.SmoothTransformation
             )

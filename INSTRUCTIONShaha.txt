@@ -136,17 +136,29 @@ This shyt
         user="root",       >
         password="6789", < Leave blank if no password
         database="pos_system", < Do not change
+-----------------------------------------
+FOR IDE
 
 5. Run the file main.py (launcher) only. Running the other files is not recommended.
 Does not work when switching windows blah blah blah Because main.py connects the files together blah blah blah
 
-6. Available user accounts:
+6. Use 'TestChisa.jpg' (Remove "C:/Users/Administrator/PycharmProjects/MiguelitosHypedForDef/") in folder for showcasing image function/database.
+-----------------------------------------
+FOR EXECUTABLE
+
+1. Unpack the ZIP file.
+
+2. Go to MiguelitosHypedForDef>output>main>main.exe
+
+----------------------------------------------------------------------------------
+
+Available user accounts:
 Username - Password
 admin - Admin@123
 Yngel - Cutie@123
 cashier - Cashier@123
 
-6. Use 'TestChisa.jpg' (Remove "C:/Users/Administrator/PycharmProjects/MiguelitosHypedForDef/") in folder for showcasing image function/database.
+----------------------------------------------------------------------------------
 
 DevNuts
 
@@ -184,7 +196,7 @@ DevNuts
 **  -Add Receipts (Copy from FasterFood)
 *   -Make Login Fullscreen with no border
 **  -Add income trend analysis (from Birds repo)
-*** -Make every scrollable area draggable
+** -Make every scrollable area draggable
 **  -Add 3 sizes. Sizes editor should show  "12oz, 16oz, 12oz and 16oz". Inventory should show that but main should
 only show the 2 sizes.
 **  -Add more security features - Unique session IDs, Logout type tracking, Audit on order placement or user unlock (Copy from FasterFood)

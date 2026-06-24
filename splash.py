@@ -4,6 +4,7 @@
 # rest of the app modules (which depend on the DB) are even imported.
 
 import os
+import sys
 import time
 
 from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QApplication
@@ -13,6 +14,19 @@ from PyQt5.QtCore import Qt, QTimer, QRectF, QEventLoop
 CREAM  = QColor("#FFF8E7")
 YELLOW = QColor("#FFD700")
 GREEN  = QColor("#008000")
+
+
+def _resource(filename):
+    """Resolve a data-file path that works in both:
+    - normal Python (dev mode): looks next to this script file
+    - PyInstaller frozen exe: looks in sys._MEIPASS (the _internal folder)
+      after main.py has already set CWD there via os.chdir(sys._MEIPASS).
+    """
+    if getattr(sys, 'frozen', False):
+        # Frozen: CWD was set to sys._MEIPASS by main.py, so a bare name works.
+        return filename
+    # Dev: look next to this source file.
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
 
 
 class _Spinner(QWidget):
@@ -85,7 +99,7 @@ class LoadingScreen(QWidget):
 
         self.logo_lbl = QLabel()
         self.logo_lbl.setAlignment(Qt.AlignCenter)
-        logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo.png")
+        logo_path = _resource("logo.png")
         if os.path.exists(logo_path):
             pix = QPixmap(logo_path)
             if not pix.isNull():

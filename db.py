@@ -51,12 +51,17 @@ def get_db_connection():
             "Run: pip install mysql-connector-python"
         )
     conn = mysql.connector.connect(
-        host="localhost",
-        port="3306",
+        host="127.0.0.1",
+        port=3306,              # FIX: was "3306" (string) — must be an integer
         user="root",
         password="6789",
         database="pos_system",
         connection_timeout=5,
+        use_pure=True,          # FIX: force pure-Python connector.
+                                # The C extension (_mysql_connector.pyd) causes
+                                # a silent process crash inside PyInstaller
+                                # bundles (especially on Python 3.14). This
+                                # one flag bypasses that entirely.
     )
     global _schema_ensured
     if not _schema_ensured:
